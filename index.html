@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="theme-color" content="#020c1a"/>
+
+  <!-- PWA / iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Hydra"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="application-name" content="Hydra"/>
+  <meta name="description" content="Track your daily water intake"/>
+
+  <!-- iOS splash / icons (generated inline as SVG data URIs) -->
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <link rel="manifest" href="manifest.json"/>
+
+  <title>Hydra 💧</title>
+
+  <!-- React + Babel (runs JSX in browser — no build step needed) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    html, body { margin:0; padding:0; background:#020c1a;
+      /* Safe area for iPhone notch / home bar */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    #root { min-height: 100dvh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+const ICON_CAP = { glass:1000, b500:500, b250:250, b1000:1000 };
+const STYLE_DEFAULTS = {
+  glass:[{ml:200,label:"Small"},{ml:350,label:"Medium"},{ml:500,label:"Large"},{ml:750,label:"Jumbo"}],
+  b500: [{ml:100,label:"100ml"},{ml:250,label:"250ml"},{ml:350,label:"350ml"},{ml:500,label:"Full"}],
+  b250: [{ml:100,label:"100ml"},{ml:150,label:"150ml"},{ml:200,label:"200ml"},{ml:250,label:"Full"}],
+  b1000:[{ml:250,label:"250ml"},{ml:500,label:"500ml"},{ml:750,label:"750ml"},{ml:1000,label:"Full"}],
+};
+const DEFAULT_GLASSES = STYLE_DEFAULTS.glass;
+const FILL_FOR_ML = (ml, iconStyle="glass") =>
+  Math.min(1, Math.max(0.04, ml / (ICON_CAP[iconStyle]||1000)));
+const TARGET_PRESETS_DEFAULT = [1500,2000,2500,3000];
+const REMINDER_OPTIONS = [
+  {label:"15m",value:15},{label:"30m",value:30},
+  {label:"1hr",value:60},{label:"2hr",value:120},{label:"3hr",value:180}
+];
+
+// Unit conversion helpers
+const UNIT_LABEL = { ml:'mL', L:'L', floz:'fl oz', gal:'gal' };
+function toDisplay(ml, unit) {
+  if(unit==='L')    return (ml/1000).toFixed(ml%1000===0?0:2);
+  if(unit==='floz') return (ml/29.5735).toFixed(1);
+  if(unit==='gal')  return (ml/3785.41).toFixed(3);
+  return ml;
+}
+function fromDisplay(val, unit) {
+  const n = parseFloat(val);
+  if(isNaN(n)) return 0;
+  if(unit==='L')    return Math.round(n*1000);
+  if(unit==='floz') return Math.round(n*29.5735);
+  if(unit==='gal')  return Math.round(n*3785.41);
+  return Math.round(n);
+}
+function dispStr(ml, unit) { return `${toDisplay(ml,unit)} ${UNIT_LABEL[unit]}`; }
+
+function formatTime(d){return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
+function nowStr(){const n=new Date();return`${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}`;}
+function toMin(s){const[h,m]=s.split(":").map(Number);return h*60+m;}
+const todayKey=()=>new Date().toISOString().split("T")[0];
+const SK="hydra_v15";
+function load(){try{const r=localStorage.getItem(SK);return r?JSON.parse(r):null;}catch{return null;}}
+function persist(d){try{localStorage.setItem(SK,JSON.stringify(d));}catch{}}
+
+/* ═══════════════════════════════════
+   GLASS — wide mouth tumbler
+   ═══════════════════════════════════ */
+function GlassShape({W,H,fill,uid}){
+  const TW=W*0.86,BW=W*0.54,RIM=H*0.055,WALL=W*0.055;
+  const tl=(W-TW)/2,tr=tl+TW,bl=(W-BW)/2,br=bl+BW;
+  const inner=H-RIM-H*0.04,wY=RIM+inner*(1-fill);
+  const lerp=(y)=>{const t=(y-RIM)/(H-RIM-H*0.04);return{l:tl+WALL+(bl-tl-WALL)*t,r:tr-WALL+(br-tr+WALL)*t};};
+  const top=lerp(wY),bot=lerp(H-H*0.04),mid=(top.l+top.r)/2;
+  return(<>
+    <defs>
+      <clipPath id={`cp${uid}`}><polygon points={`${tl},${RIM} ${tr},${RIM} ${br},${H} ${bl},${H}`}/></clipPath>
+      <linearGradient id={`wg${uid}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(130,210,255,0.92)"/><stop offset="100%" stopColor="rgba(20,105,200,0.96)"/></linearGradient>
+      <linearGradient id={`sg${uid}`} x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="rgba(255,255,255,0.24)"/><stop offset="42%" stopColor="rgba(255,255,255,0.02)"/><stop offset="100%" stopColor="rgba(255,255,255,0.1)"/></linearGradient>
+    </defs>
+    <polygon points={`${tl},${RIM} ${tr},${RIM} ${br},${H} ${bl},${H}`} fill="rgba(155,210,255,0.07)" stroke="rgba(100,175,255,0.32)" strokeWidth="1.2" strokeLinejoin="round"/>
+    <g clipPath={`url(#cp${uid})`}>
+      <polygon points={`${top.l},${wY} ${top.r},${wY} ${bot.r},${H} ${bot.l},${H}`} fill={`url(#wg${uid})`} opacity="0.9" style={{transition:"all 0.22s"}}/>
+      <path d={`M${top.l},${wY} Q${mid-4},${wY-H*0.04} ${mid},${wY} Q${mid+4},${wY+H*0.04} ${top.r},${wY}`} fill="rgba(200,240,255,0.42)" style={{transition:"all 0.22s"}}/>
+      {fill>0.38&&<circle cx={mid-3} cy={wY+H*0.09} r={W*0.03} fill="rgba(255,255,255,0.3)"/>}
+      {fill>0.6&&<circle cx={mid+5} cy={wY+H*0.18} r={W*0.034} fill="rgba(255,255,255,0.2)"/>}
+    </g>
+    <polygon points={`${tl},${RIM} ${tr},${RIM} ${br},${H} ${bl},${H}`} fill={`url(#sg${uid})`}/>
+    <polygon points={`${tl},${RIM} ${tr},${RIM} ${br},${H} ${bl},${H}`} fill="none" stroke="rgba(140,200,255,0.5)" strokeWidth="1.2" strokeLinejoin="round"/>
+    <line x1={tl} y1={RIM} x2={tr} y2={RIM} stroke="rgba(210,245,255,0.76)" strokeWidth="1.8" strokeLinecap="round"/>
+    <line x1={tl+WALL+1.5} y1={RIM+H*0.08} x2={bl+WALL+1} y2={H-H*0.13} stroke="rgba(255,255,255,0.13)" strokeWidth="1.4" strokeLinecap="round"/>
+  </>);
+}
+
+function f2(n){return Math.round(n*100)/100;}
+
+/* ══════════════════════════════════════════════════════════════
+   500ml BOTTLE — tall & slim, BLUE ribbed cap
+   Body: smooth cylinder with 3 WIDE diagonal swirl channels
+   ══════════════════════════════════════════════════════════════ */
+function Bottle500Shape({W,H,fill,uid}){
+  const cx=W/2;
+  const capH=H*0.075, capW=W*0.40;
+  const thrH=H*0.022, thrW=W*0.44;
+  const nkT=capH+thrH, nkB=H*0.190, nkW=W*0.30;
+  const shB=H*0.292;
+  const bdW=W*0.88, bdB=H*0.936, bsB=H*0.990;
+  const bL=cx-bdW/2, bR=cx+bdW/2;
+  const nkL=cx-nkW/2, nkR=cx+nkW/2;
+
+  const outline=[
+    `M${f2(nkL)},${f2(nkT)}`,`L${f2(nkR)},${f2(nkT)}`,`L${f2(nkR)},${f2(nkB)}`,
+    `C${f2(nkR+W*0.20)},${f2(nkB+H*0.025)} ${f2(bR)},${f2(shB-H*0.012)} ${f2(bR)},${f2(shB)}`,
+    `L${f2(bR)},${f2(bdB)}`,
+    `Q${f2(bR)},${f2(bsB)} ${cx},${f2(bsB)}`,
+    `Q${f2(bL)},${f2(bsB)} ${f2(bL)},${f2(bdB)}`,
+    `L${f2(bL)},${f2(shB)}`,
+    `C${f2(bL)},${f2(shB-H*0.012)} ${f2(nkL-W*0.20)},${f2(nkB+H*0.025)} ${f2(nkL)},${f2(nkB)}`,`Z`
+  ].join(" ");
+
+  const wTop=f2(nkB+H*0.04), wBot=f2(bdB-H*0.01);
+  const wY=f2(Math.max(wTop, wBot-(wBot-wTop)*fill));
+
+  // 4 diagonal swirl channels bottom-left → top-right
+  const bdH=bdB-shB;
+  const spirals=[0.05,0.30,0.55,0.80].map(offset=>{
+    const ch=bdH*0.22;
+    const yL=shB+bdH*offset+ch, yR=shB+bdH*offset;
+    const t2=ch*0.38;
+    const cpx1=bL+bdW*0.30, cpx2=bR-bdW*0.30;
+    const sl=yL-yR;
+    return {
+      trough:`M${f2(bL)},${f2(yL-t2)} C${f2(cpx1)},${f2(yL-t2-sl*0.05)} ${f2(cpx2)},${f2(yR-t2+sl*0.12)} ${f2(bR)},${f2(yR-t2)} L${f2(bR)},${f2(yR+t2)} C${f2(cpx2)},${f2(yR+t2+sl*0.12)} ${f2(cpx1)},${f2(yL+t2-sl*0.05)} ${f2(bL)},${f2(yL+t2)} Z`,
+      top:`M${f2(bL)},${f2(yL-t2)} C${f2(cpx1)},${f2(yL-t2-sl*0.05)} ${f2(cpx2)},${f2(yR-t2+sl*0.12)} ${f2(bR)},${f2(yR-t2)}`
+    };
+  });
+
+  return(<>
+    <defs>
+      <clipPath id={`cp${uid}`}><path d={outline}/></clipPath>
+      <linearGradient id={`wg${uid}`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="rgba(115,210,255,0.93)"/>
+        <stop offset="100%" stopColor="rgba(14,90,210,0.97)"/>
+      </linearGradient>
+      <linearGradient id={`sh${uid}`} x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"  stopColor="rgba(255,255,255,0.00)"/>
+        <stop offset="8%"  stopColor="rgba(255,255,255,0.30)"/>
+        <stop offset="22%" stopColor="rgba(255,255,255,0.08)"/>
+        <stop offset="100%" stopColor="rgba(255,255,255,0.00)"/>
+      </linearGradient>
+      <linearGradient id={`cg${uid}`} x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"  stopColor="rgba(28,58,195,0.98)"/>
+        <stop offset="50%" stopColor="rgba(58,100,245,0.98)"/>
+        <stop offset="100%" stopColor="rgba(22,48,178,0.98)"/>
+      </linearGradient>
+    </defs>
+
+    {/* Blue ribbed cap */}
+    <rect x={f2(cx-capW/2)} y={0} width={f2(capW)} height={f2(capH)} rx={f2(capH*0.30)} fill={`url(#cg${uid})`}/>
+    {[0.22,0.48,0.74].map((t,i)=>(
+      <line key={i} x1={f2(cx-capW/2+capW*0.10)} y1={f2(capH*t)} x2={f2(cx+capW/2-capW*0.10)} y2={f2(capH*t)}
+        stroke="rgba(160,200,255,0.35)" strokeWidth="0.72"/>
+    ))}
+    <rect x={f2(cx-capW/2)} y={0} width={f2(capW)} height={f2(capH)} rx={f2(capH*0.30)}
+      fill="none" stroke="rgba(60,100,220,0.75)" strokeWidth="1.0"/>
+    <rect x={f2(cx-capW/2+capW*0.14)} y={f2(capH*0.10)} width={f2(capW*0.14)} height={f2(capH*0.72)}
+      rx={f2(capW*0.04)} fill="rgba(255,255,255,0.14)"/>
+
+    {/* Thread collar */}
+    <rect x={f2(cx-thrW/2)} y={f2(capH)} width={f2(thrW)} height={f2(thrH)} rx={f2(thrH*0.4)}
+      fill="rgba(40,80,200,0.16)" stroke="rgba(80,125,240,0.38)" strokeWidth="0.8"/>
+
+    {/* Body shell */}
+    <path d={outline} fill="rgba(210,235,255,0.06)" stroke="rgba(130,195,255,0.25)" strokeWidth="1.0"/>
+
+    {/* Water */}
+    <g clipPath={`url(#cp${uid})`}>
+      <rect x={0} y={wY} width={W} height={f2(bsB-wY+2)}
+        fill={`url(#wg${uid})`} opacity="0.82"
+        style={{transition:"y 0.28s ease,height 0.28s ease"}}/>
+      <path d={`M${f2(bL+1)},${wY} Q${f2(cx-4)},${f2(wY-3)} ${cx},${wY} Q${f2(cx+4)},${f2(wY+3)} ${f2(bR-1)},${wY}`}
+        fill="rgba(200,242,255,0.44)" style={{transition:"all 0.28s"}}/>
+      {fill>0.22&&<circle cx={f2(cx-4)} cy={f2(wY+7)}  r="1.4" fill="rgba(255,255,255,0.28)"/>}
+      {fill>0.48&&<circle cx={f2(cx+5)} cy={f2(wY+16)} r="1.7" fill="rgba(255,255,255,0.20)"/>}
+
+      {/* Diagonal swirl channels */}
+      {spirals.map((s,i)=>(
+        <g key={i}>
+          <path d={s.trough} fill="rgba(18,55,175,0.16)"/>
+          <path d={s.top} fill="none" stroke="rgba(220,248,255,0.62)" strokeWidth="1.2" strokeLinecap="round"/>
+        </g>
+      ))}
+    </g>
+
+    {/* Shine overlay */}
+    <path d={outline} fill={`url(#sh${uid})`}/>
+    <path d={outline} fill="none" stroke="rgba(155,215,255,0.44)" strokeWidth="1.0"/>
+    <line x1={f2(nkL+1.5)} y1={f2(nkT+3)} x2={f2(nkL+2)} y2={f2(nkB-3)}
+      stroke="rgba(255,255,255,0.18)" strokeWidth="1.2" strokeLinecap="round"/>
+  </>);
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   250ml BOTTLE — Bisleri 250ml style
+   Silhouette has 6 sinusoidal ring-ribs baked into both edges.
+   Green cap, short wide neck, steep shoulder, squat body.
+   ══════════════════════════════════════════════════════════════ */
+function Bottle250Shape({W,H,fill,uid}){
+  const cx=W/2;
+  const capH=H*0.09,  capW=W*0.40;
+  const thrH=H*0.025, thrW=W*0.46;
+  const nkT=capH+thrH, nkB=H*0.19, nkW=W*0.32;
+  const shB=H*0.27;
+  const bdW=W*0.72, bdB=H*0.925, bsB=H*0.978;
+  const bL=cx-bdW/2, bR=cx+bdW/2;
+  const nkL=cx-nkW/2, nkR=cx+nkW/2;
+
+  const outline=[
+    `M${f2(nkL)},${f2(nkT)}`,`L${f2(nkR)},${f2(nkT)}`,`L${f2(nkR)},${f2(nkB)}`,
+    `C${f2(nkR+W*0.20)},${f2(nkB+H*0.02)} ${f2(bR)},${f2(shB-H*0.015)} ${f2(bR)},${f2(shB)}`,
+    `L${f2(bR)},${f2(bdB)}`,
+    `Q${f2(bR)},${f2(bsB)} ${cx},${f2(bsB)}`,
+    `Q${f2(bL)},${f2(bsB)} ${f2(bL)},${f2(bdB)}`,
+    `L${f2(bL)},${f2(shB)}`,
+    `C${f2(bL)},${f2(shB-H*0.015)} ${f2(nkL-W*0.20)},${f2(nkB+H*0.02)} ${f2(nkL)},${f2(nkB)}`,`Z`
+  ].join(' ');
+
+  const wY=f2(Math.max(nkB+H*0.04, bdB-H*0.01-(bdB-H*0.01-(nkB+H*0.04))*fill));
+  const ribs=[0.18,0.34,0.50,0.66,0.82].map(t=>f2(shB+(bdB-shB)*t));
+  const ribH=f2(H*0.022);
+
+  return(<>
+    <defs>
+      <clipPath id={`cp${uid}`}><path d={outline}/></clipPath>
+      <linearGradient id={`wg${uid}`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="rgba(140,222,255,0.92)"/>
+        <stop offset="100%" stopColor="rgba(14,90,215,0.97)"/>
+      </linearGradient>
+      <linearGradient id={`sl${uid}`} x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"  stopColor="rgba(255,255,255,0.00)"/>
+        <stop offset="9%"  stopColor="rgba(255,255,255,0.28)"/>
+        <stop offset="24%" stopColor="rgba(255,255,255,0.08)"/>
+        <stop offset="52%" stopColor="rgba(255,255,255,0.00)"/>
+        <stop offset="100%" stopColor="rgba(255,255,255,0.00)"/>
+      </linearGradient>
+      <linearGradient id={`cg${uid}`} x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"  stopColor="rgba(18,148,66,0.98)"/>
+        <stop offset="50%" stopColor="rgba(50,195,96,0.98)"/>
+        <stop offset="100%" stopColor="rgba(16,132,58,0.98)"/>
+      </linearGradient>
+    </defs>
+    <rect x={f2(cx-capW/2)} y={0} width={f2(capW)} height={f2(capH)} rx={f2(capH*0.32)} fill={`url(#cg${uid})`}/>
+    {[0.25,0.52,0.78].map((t,i)=>(
+      <line key={i} x1={f2(cx-capW/2+capW*0.10)} y1={f2(capH*t)} x2={f2(cx+capW/2-capW*0.10)} y2={f2(capH*t)}
+        stroke="rgba(130,255,160,0.38)" strokeWidth="0.75"/>
+    ))}
+    <rect x={f2(cx-capW/2)} y={0} width={f2(capW)} height={f2(capH)} rx={f2(capH*0.32)}
+      fill="none" stroke="rgba(32,180,75,0.82)" strokeWidth="1.1"/>
+    <rect x={f2(cx-capW/2+capW*0.14)} y={f2(capH*0.09)} width={f2(capW*0.17)} height={f2(capH*0.72)}
+      rx={f2(capW*0.05)} fill="rgba(255,255,255,0.13)"/>
+    <rect x={f2(cx-thrW/2)} y={f2(capH)} width={f2(thrW)} height={f2(thrH)} rx={f2(thrH*0.5)}
+      fill="rgba(30,150,65,0.13)" stroke="rgba(50,180,85,0.38)" strokeWidth="0.8"/>
+    <path d={outline} fill="rgba(215,238,255,0.07)" stroke="rgba(130,195,255,0.30)" strokeWidth="1.1"/>
+    <g clipPath={`url(#cp${uid})`}>
+      <rect x={0} y={wY} width={W} height={f2(bsB-wY+2)}
+        fill={`url(#wg${uid})`} opacity="0.88"
+        style={{transition:"y 0.3s ease,height 0.3s ease"}}/>
+      <path d={`M${f2(bL+1)},${wY} Q${f2(cx-4)},${f2(wY-3)} ${cx},${wY} Q${f2(cx+4)},${f2(wY+3)} ${f2(bR-1)},${wY}`}
+        fill="rgba(200,242,255,0.46)" style={{transition:"all 0.3s"}}/>
+      {fill>0.25&&<circle cx={f2(cx-4)} cy={f2(wY+5)} r="1.2" fill="rgba(255,255,255,0.28)"/>}
+      {fill>0.52&&<circle cx={f2(cx+3)} cy={f2(wY+12)} r="1.5" fill="rgba(255,255,255,0.20)"/>}
+    </g>
+    <path d={outline} fill={`url(#sl${uid})`}/>
+    {ribs.map((ry,i)=>(
+      <g key={i} clipPath={`url(#cp${uid})`}>
+        <rect x={f2(bL-1)} y={ry} width={f2(bdW+2)} height={ribH} fill="rgba(80,140,220,0.18)"/>
+        <line x1={f2(bL-1)} y1={ry} x2={f2(bR+1)} y2={ry} stroke="rgba(230,250,255,0.62)" strokeWidth="1.0"/>
+        <line x1={f2(bL-1)} y1={f2(ry+ribH)} x2={f2(bR+1)} y2={f2(ry+ribH)} stroke="rgba(15,45,145,0.28)" strokeWidth="0.9"/>
+      </g>
+    ))}
+    <path d={outline} fill="none" stroke="rgba(140,205,255,0.50)" strokeWidth="1.1"/>
+    <line x1={f2(nkL+1.5)} y1={f2(nkT+3)} x2={f2(nkL+2)} y2={f2(nkB-2)}
+      stroke="rgba(255,255,255,0.22)" strokeWidth="1.2" strokeLinecap="round"/>
+  </>);
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   1L BOTTLE — taller & wider than 500ml, smooth cylindrical body
+   Navy/dark-blue screw cap, 2 groove lines (above+below label band)
+   ══════════════════════════════════════════════════════════════ */
+function Bottle1000Shape({W,H,fill,uid}){
+  const cx=W/2;
+  const capH=H*0.075, capW=W*0.44;
+  const thrH=H*0.025, thrW=W*0.50;
+  const nkT=capH+thrH, nkB=H*0.195, nkW=W*0.38;
+  const shB=H*0.305;
+  const bdW=W*0.92, bdB=H*0.935;
+  const bsB=H*0.995;
+  const bL=cx-bdW/2, bR=cx+bdW/2;
+  const nkL=cx-nkW/2, nkR=cx+nkW/2;
+
+  const outline=[
+    `M${f2(nkL)},${f2(nkT)}`,`L${f2(nkR)},${f2(nkT)}`,`L${f2(nkR)},${f2(nkB)}`,
+    `C${f2(nkR+W*0.17)},${f2(nkB+H*0.032)} ${f2(bR)},${f2(shB-H*0.012)} ${f2(bR)},${f2(shB)}`,
+    `L${f2(bR)},${f2(bdB)}`,
+    `Q${f2(bR)},${f2(bsB)} ${cx},${f2(bsB)}`,
+    `Q${f2(bL)},${f2(bsB)} ${f2(bL)},${f2(bdB)}`,
+    `L${f2(bL)},${f2(shB)}`,
+    `C${f2(bL)},${f2(shB-H*0.012)} ${f2(nkL-W*0.17)},${f2(nkB+H*0.032)} ${f2(nkL)},${f2(nkB)}`,`Z`
+  ].join(' ');
+
+  const wTop=f2(nkB+H*0.04), wBot=f2(bdB-H*0.01);
+  const wY=f2(Math.max(wTop, wBot-(wBot-wTop)*fill));
+
+  // label band (middle 28% of body height)
+  const lblY1=f2(shB+(bdB-shB)*0.36), lblY2=f2(shB+(bdB-shB)*0.64);
+  const grooveYs=[f2(shB+(bdB-shB)*0.33), f2(shB+(bdB-shB)*0.66)];
+
+  return(<>
+    <defs>
+      <clipPath id={`cp${uid}`}><path d={outline}/></clipPath>
+      <linearGradient id={`wg${uid}`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stopColor="rgba(140,220,255,0.93)"/>
+        <stop offset="100%" stopColor="rgba(14,90,210,0.97)"/>
+      </linearGradient>
+      <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"   stopColor="rgba(255,255,255,0.18)"/>
+        <stop offset="16%"  stopColor="rgba(255,255,255,0.26)"/>
+        <stop offset="44%"  stopColor="rgba(200,230,255,0.04)"/>
+        <stop offset="100%" stopColor="rgba(100,170,255,0.06)"/>
+      </linearGradient>
+      <linearGradient id={`cg${uid}`} x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"   stopColor="rgba(18,36,130,0.98)"/>
+        <stop offset="50%"  stopColor="rgba(32,62,178,0.98)"/>
+        <stop offset="100%" stopColor="rgba(14,28,110,0.98)"/>
+      </linearGradient>
+      <linearGradient id={`lg${uid}`} x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"   stopColor="rgba(12,55,180,0.52)"/>
+        <stop offset="35%"  stopColor="rgba(22,75,220,0.68)"/>
+        <stop offset="65%"  stopColor="rgba(22,75,220,0.68)"/>
+        <stop offset="100%" stopColor="rgba(12,55,180,0.52)"/>
+      </linearGradient>
+    </defs>
+
+    {/* Navy cap */}
+    <rect x={f2(cx-capW/2)} y={0} width={f2(capW)} height={f2(capH)} rx={f2(capH*0.30)} fill={`url(#cg${uid})`}/>
+    {[0.25,0.52,0.78].map((t,i)=>(
+      <line key={i} x1={f2(cx-capW/2+capW*0.08)} y1={f2(capH*t)} x2={f2(cx+capW/2-capW*0.08)} y2={f2(capH*t)}
+        stroke="rgba(100,130,255,0.38)" strokeWidth="0.8"/>
+    ))}
+    <rect x={f2(cx-capW/2)} y={0} width={f2(capW)} height={f2(capH)} rx={f2(capH*0.30)}
+      fill="none" stroke="rgba(55,88,210,0.80)" strokeWidth="1.1"/>
+    <line x1={f2(cx-capW/2+capW*0.18)} y1={f2(capH*0.12)} x2={f2(cx+capW/2-capW*0.18)} y2={f2(capH*0.12)}
+      stroke="rgba(140,170,255,0.25)" strokeWidth="1.0"/>
+
+    {/* Thread collar */}
+    <rect x={f2(cx-thrW/2)} y={f2(capH)} width={f2(thrW)} height={f2(thrH)} rx={f2(thrH*0.44)}
+      fill="rgba(28,55,175,0.18)" stroke="rgba(58,90,210,0.40)" strokeWidth="0.8"/>
+
+    {/* Body */}
+    <path d={outline} fill="rgba(220,240,255,0.05)" stroke="rgba(130,195,255,0.28)" strokeWidth="1.0"/>
+
+    {/* Water */}
+    <g clipPath={`url(#cp${uid})`}>
+      <rect x={0} y={wY} width={W} height={f2(bsB-wY+2)}
+        fill={`url(#wg${uid})`} opacity="0.88"
+        style={{transition:"y 0.28s ease,height 0.28s ease"}}/>
+      <path d={`M${f2(bL+2)},${wY} Q${f2(cx-4)},${f2(wY-3)} ${cx},${wY} Q${f2(cx+4)},${f2(wY+3)} ${f2(bR-2)},${wY}`}
+        fill="rgba(200,242,255,0.44)" style={{transition:"all 0.28s"}}/>
+      {fill>0.22&&<circle cx={f2(cx-5)} cy={f2(wY+7)} r="1.5" fill="rgba(255,255,255,0.28)"/>}
+      {fill>0.48&&<circle cx={f2(cx+5)} cy={f2(wY+16)} r="1.8" fill="rgba(255,255,255,0.20)"/>}
+    </g>
+
+    {/* Shine */}
+    <path d={outline} fill={`url(#bg${uid})`}/>
+
+    {/* Label band */}
+    <g clipPath={`url(#cp${uid})`}>
+      <rect x={f2(bL)} y={lblY1} width={f2(bdW)} height={f2(lblY2-lblY1)} fill={`url(#lg${uid})`}/>
+      <text x={cx} y={f2((lblY1+lblY2)/2+H*0.028)} textAnchor="middle"
+        style={{fontSize:f2(H*0.068),fontWeight:900,fill:"rgba(220,240,255,0.78)",
+          fontFamily:"'Nunito',sans-serif",letterSpacing:"0.04em"}}>1L</text>
+    </g>
+
+    {/* Groove lines flanking label */}
+    {grooveYs.map((gy,i)=>(
+      <g key={i} clipPath={`url(#cp${uid})`}>
+        <line x1={f2(bL+1)} y1={gy} x2={f2(bR-1)} y2={gy}
+          stroke="rgba(200,228,255,0.32)" strokeWidth="1.2"/>
+        <line x1={f2(bL+1)} y1={f2(gy+H*0.007)} x2={f2(bR-1)} y2={f2(gy+H*0.007)}
+          stroke="rgba(10,40,140,0.16)" strokeWidth="0.7"/>
+      </g>
+    ))}
+
+    <path d={outline} fill="none" stroke="rgba(140,205,255,0.50)" strokeWidth="1.0"/>
+    <line x1={f2(nkL+1.5)} y1={f2(nkT+3)} x2={f2(nkL+2)} y2={f2(nkB-3)}
+      stroke="rgba(255,255,255,0.20)" strokeWidth="1.2" strokeLinecap="round"/>
+  </>);
+}
+
+
+function getShape(icon,W,H,fill,uid){
+  if(icon==="b500")  return <Bottle500Shape  W={W} H={H} fill={fill} uid={uid}/>;
+  if(icon==="b250")  return <Bottle250Shape  W={W} H={H} fill={fill} uid={uid}/>;
+  if(icon==="b1000") return <Bottle1000Shape W={W} H={H} fill={fill} uid={uid}/>;
+  return <GlassShape W={W} H={H} fill={fill} uid={uid}/>;
+}
+
+// Canvas size per icon style
+const ICON_DIMS = { glass:{W:36,H:48}, b500:{W:28,H:60}, b250:{W:34,H:72}, b1000:{W:32,H:68} };
+
+/* ── Single drink button on home screen ── */
+function DrinkBtn({ml, label, iconStyle, fill, onClick, lit}){
+  const {W,H}=ICON_DIMS[iconStyle]||ICON_DIMS.glass;
+  const uid=`db_${iconStyle}_${ml}`;
+  return(
+    <button onClick={onClick} className="gbtn"
+      style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",
+        alignItems:"center",gap:4,padding:"6px 2px",borderRadius:10,transition:"transform 0.14s",flex:1,
+        minHeight:84,justifyContent:"flex-end"}}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+        style={{overflow:"visible",
+          filter:lit?"drop-shadow(0 0 10px rgba(77,200,255,0.95))":"drop-shadow(0 2px 6px rgba(0,0,0,0.55))",
+          transition:"filter 0.28s"}}>
+        {getShape(iconStyle,W,H,fill,uid)}
+      </svg>
+      <div style={{textAlign:"center",lineHeight:1.2}}>
+        <div style={{fontSize:11.5,fontWeight:800,color:lit?"#4dc8ff":"#a8d8f0",transition:"color 0.28s"}}>
+          {ml}<span style={{fontSize:8.5,fontWeight:600,opacity:0.6}}>ml</span>
+        </div>
+        <div style={{fontSize:8.5,color:"rgba(168,216,240,0.34)",fontWeight:600}}>{label}</div>
+      </div>
+    </button>
+  );
+}
+
+/* ── Icon Style Selector — used in Settings ── */
+const ICON_STYLES = [
+  {id:"glass", label:"Glass",         desc:"Tumbler · up to 1000ml",  capColor:null},
+  {id:"b500",  label:"500ml Bottle",  desc:"Blue cap · up to 500ml",  capColor:"blue"},
+  {id:"b250",  label:"250ml Bottle",  desc:"Green cap · up to 250ml", capColor:"green"},
+  {id:"b1000", label:"1L Bottle",     desc:"Navy cap · up to 1000ml", capColor:"navy"},
+];
+
+function StyleCard({opt, selected, onClick}){
+  const {W,H}=ICON_DIMS[opt.id];
+  // show at a comfortable preview size
+  const pW=Math.round(W*1.55), pH=Math.round(H*1.55);
+  return(
+    <button onClick={onClick}
+      style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8,
+        padding:"16px 8px 12px",borderRadius:14,
+        border:`2px solid ${selected?"#4dc8ff":"rgba(100,180,255,0.14)"}`,
+        background:selected?"rgba(77,200,255,0.11)":"rgba(255,255,255,0.04)",
+        cursor:"pointer",transition:"all 0.18s",minHeight:120,justifyContent:"flex-end"}}>
+      <div style={{flex:1,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+        <svg width={pW} height={pH} viewBox={`0 0 ${W} ${H}`}
+          style={{overflow:"visible",filter:"drop-shadow(0 3px 10px rgba(0,0,0,0.55))"}}>
+          {getShape(opt.id, W, H, 0.52, `sc_${opt.id}`)}
+        </svg>
+      </div>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:10.5,fontWeight:800,color:selected?"#4dc8ff":"rgba(168,216,240,0.5)",lineHeight:1.3}}>{opt.label}</div>
+        <div style={{fontSize:8.5,color:"rgba(168,216,240,0.25)",fontWeight:600,marginTop:2}}>{opt.desc}</div>
+      </div>
+      {selected&&(
+        <div style={{position:"absolute",top:8,right:8,width:14,height:14,borderRadius:"50%",
+          background:"#4dc8ff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <span style={{fontSize:8,color:"#020c1a",fontWeight:900}}>✓</span>
+        </div>
+      )}
+    </button>
+  );
+}
+
+/* ── Custom mode preview ── */
+function PreviewIcon({value, max=1000, iconStyle}){
+  const fill=Math.min(1,value/max);
+  const {W,H}=ICON_DIMS[iconStyle]||ICON_DIMS.glass;
+  const sW=Math.round(W*1.4), sH=Math.round(H*1.4);
+  return(
+    <svg width={sW} height={sH} viewBox={`0 0 ${W} ${H}`}
+      style={{filter:"drop-shadow(0 4px 16px rgba(77,200,255,0.4))",flexShrink:0}}>
+      {getShape(iconStyle,W,H,fill,"cust_prev")}
+    </svg>
+  );
+}
+
+/* ════════════════════════════════════════════════
+   MAIN APP
+   ════════════════════════════════════════════════ */
+function App(){
+  const [tab,setTab]=useState("home");
+  const [target,setTarget]=useState(2500);
+  const [targetSlider,setTargetSlider]=useState(2500);
+  const [targetPresets,setTargetPresets]=useState(TARGET_PRESETS_DEFAULT);
+  const [startTime,setStartTime]=useState("07:00");
+  const [endTime,setEndTime]=useState("22:00");
+  const [reminderInterval,setReminderInterval]=useState(60);
+  const [entries,setEntries]=useState({});
+  const [customMl,setCustomMl]=useState(300);
+  const [inputMode,setInputMode]=useState("glass");
+  const [notifPerm,setNotifPerm]=useState("default");
+  const [reminderActive,setReminderActive]=useState(false);
+  const [toast,setToast]=useState(null);
+  const [lastAdded,setLastAdded]=useState(null);
+  const [goalExpanded,setGoalExpanded]=useState(true);
+  const [historyDate,setHistoryDate]=useState(null); // null=show all list
+  const [unit,setUnit]=useState('ml'); // 'ml' | 'L' | 'floz' | 'gal'
+  // ── Global icon style for ALL drink buttons ──
+  const [iconStyle,setIconStyle]=useState("glass");
+  // ── Drink options (ml + label only) ──
+  const [glasses,setGlasses]=useState(DEFAULT_GLASSES);
+  const [editGlasses,setEditGlasses]=useState(false);
+  const [glassInputs,setGlassInputs]=useState(DEFAULT_GLASSES.map(g=>({ml:String(g.ml),label:g.label})));
+  const [editPresets,setEditPresets]=useState(false);
+  const [presetInputs,setPresetInputs]=useState(TARGET_PRESETS_DEFAULT.map(String));
+  const toastRef=useRef(null),litRef=useRef(null),swRef=useRef(null);
+
+  // ── Register service worker & grab its registration ──────
+  useEffect(()=>{
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.ready.then(reg=>{ swRef.current=reg; });
+    }
+    if("Notification"in window) setNotifPerm(Notification.permission);
+  },[]);
+
+  useEffect(()=>{
+    const d=load();
+    if(d){
+      if(d.target){setTarget(d.target);setTargetSlider(d.target);}
+      if(d.startTime) setStartTime(d.startTime);
+      if(d.endTime) setEndTime(d.endTime);
+      if(d.reminderInterval) setReminderInterval(d.reminderInterval);
+      if(d.entries) setEntries(d.entries);
+      if(d.targetPresets){setTargetPresets(d.targetPresets);setPresetInputs(d.targetPresets.map(String));}
+      if(d.glasses){setGlasses(d.glasses);setGlassInputs(d.glasses.map(g=>({ml:String(g.ml),label:g.label})));}
+      if(d.iconStyle) setIconStyle(d.iconStyle);
+      if(d.unit) setUnit(d.unit);
+      if(typeof d.goalExpanded==="boolean") setGoalExpanded(d.goalExpanded);
+      if(typeof d.reminderActive==="boolean") setReminderActive(d.reminderActive);
+    }
+  },[]);
+
+  useEffect(()=>{
+    persist({target,startTime,endTime,reminderInterval,entries,targetPresets,glasses,iconStyle,goalExpanded,unit,reminderActive});
+  },[target,startTime,endTime,reminderInterval,entries,targetPresets,glasses,iconStyle,goalExpanded,unit,reminderActive]);
+
+  const showToast=(msg,type="info")=>{setToast({msg,type});clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(null),2400);};
+
+  // ── Request notification permission ──────────────────────
+  const askNotif=async()=>{
+    if(!("Notification"in window)) return showToast("Not supported on this browser","warn");
+    const p=await Notification.requestPermission();
+    setNotifPerm(p);
+    if(p==="granted") showToast("Notifications enabled ✓","success");
+    else if(p==="denied") showToast("Notifications blocked — check browser settings","warn");
+    return p;
+  };
+
+  // ── Send schedule/cancel to service worker ───────────────
+  const sendToSW=(type, payload={})=>{
+    const sw = swRef.current?.active || navigator.serviceWorker?.controller;
+    if(sw) sw.postMessage({type, payload});
+  };
+
+  const scheduleReminders=useCallback((active, ivMin=reminderInterval, st=startTime, et=endTime)=>{
+    if(!active){ sendToSW('CANCEL_REMINDERS'); return; }
+    const consumed=(entries[todayKey()]||[]).reduce((s,e)=>s+e.amount,0);
+    sendToSW('SCHEDULE_REMINDERS',{intervalMin:ivMin,startTime:st,endTime:et,consumed,target});
+  },[reminderInterval,startTime,endTime,entries,target]);
+
+  // Reschedule when key settings change while active
+  useEffect(()=>{
+    if(reminderActive) scheduleReminders(true);
+  },[reminderInterval,startTime,endTime,target]);
+
+  // ── Toggle reminders ON/OFF ───────────────────────────────
+  const toggleReminder=async()=>{
+    let perm=notifPerm;
+    if(perm!=="granted"){ perm=await askNotif(); }
+    if(perm!=="granted") return;
+    const next=!reminderActive;
+    setReminderActive(next);
+    if(next){
+      scheduleReminders(true);
+      showToast("Reminders scheduled ✓","success");
+    } else {
+      scheduleReminders(false);
+      showToast("Reminders paused","warn");
+    }
+  };
+
+  const today=todayKey(), todayList=entries[today]||[];
+  const consumed=todayList.reduce((s,e)=>s+e.amount,0);
+  const pct=Math.min(100,Math.round(consumed/target*100));
+  const orbFill=Math.max(3,pct);
+
+  const addEntry=(amount)=>{
+    const now=new Date();
+    setEntries(p=>({...p,[today]:[...(p[today]||[]),{id:Date.now(),time:formatTime(now),amount}]}));
+    setLastAdded(amount);clearTimeout(litRef.current);litRef.current=setTimeout(()=>setLastAdded(null),750);
+    showToast(`+${amount}ml logged 💧`,"success");
+  };
+  const delEntry=(date,id)=>setEntries(p=>({...p,[date]:(p[date]||[]).filter(e=>e.id!==id)}));
+  const allDates=Object.keys(entries).sort((a,b)=>b.localeCompare(a));
+  const applyTarget=(v)=>{setTarget(v);setTargetSlider(v);showToast(`Goal: ${v}ml`,"success");};
+
+  const saveGlasses=()=>{
+    const cap=ICON_CAP[iconStyle]||1000;
+    const parsed=glassInputs.map(g=>({ml:parseInt(g.ml),label:g.label.trim()||`${g.ml}ml`})).filter(g=>!isNaN(g.ml)&&g.ml>=50&&g.ml<=cap);
+    if(!parsed.length)return showToast("Need at least 1","warn");
+    const u=[...new Map(parsed.map(g=>[g.ml,g])).values()].slice(0,6);
+    setGlasses(u);setGlassInputs(u.map(g=>({ml:String(g.ml),label:g.label})));setEditGlasses(false);showToast("Saved ✓","success");
+  };
+  const savePresets=()=>{
+    const p=[...new Set(presetInputs.map(s=>parseInt(s)).filter(n=>!isNaN(n)&&n>=200&&n<=5000))].sort((a,b)=>a-b).slice(0,4);
+    if(!p.length)return showToast("Need at least 1","warn");
+    setTargetPresets(p);setPresetInputs(p.map(String));setEditPresets(false);showToast("Saved ✓","success");
+  };
+
+  const LBL={fontSize:"10px",fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:"8px",display:"block"};
+
+  return(
+    <div style={{fontFamily:"'Nunito',sans-serif",minHeight:"100vh",background:"linear-gradient(175deg,#020c1a 0%,#04172c 50%,#061e38 100%)",color:"#e8f4fd",position:"relative",overflow:"hidden"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Bebas+Neue&display=swap" rel="stylesheet"/>
+      <style>{`
+        *{box-sizing:border-box;margin:0;padding:0}
+        ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:rgba(77,200,255,0.2);border-radius:2px}
+        input[type=range]{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:rgba(77,200,255,0.13);outline:none;width:100%}
+        input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#7dd3fc,#3b9fe0);cursor:pointer;box-shadow:0 0 8px rgba(77,200,255,0.5)}
+        input[type=time]{background:rgba(255,255,255,0.07);border:1px solid rgba(100,180,255,0.22);border-radius:9px;padding:6px 10px;color:#e8f4fd;font-size:13px;font-family:'Nunito',sans-serif;outline:none}
+        input[type=time]:focus{border-color:#4dc8ff}
+        input[type=number]{background:rgba(255,255,255,0.07);border:1px solid rgba(100,180,255,0.2);border-radius:8px;padding:6px 8px;color:#e8f4fd;font-size:13px;font-family:'Nunito',sans-serif;outline:none;width:72px;text-align:center}
+        input[type=number]:focus{border-color:#4dc8ff}
+        input[type=text]{background:rgba(255,255,255,0.07);border:1px solid rgba(100,180,255,0.2);border-radius:8px;padding:6px 8px;color:#e8f4fd;font-size:13px;font-family:'Nunito',sans-serif;outline:none;width:76px}
+        input[type=text]:focus{border-color:#4dc8ff}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(77,200,255,0.34)}50%{box-shadow:0 0 0 9px rgba(77,200,255,0)}}
+        @keyframes toastSlide{from{opacity:0;transform:translateX(46px)}to{opacity:1;transform:translateX(0)}}
+        .gbtn:hover svg{filter:drop-shadow(0 0 12px rgba(77,200,255,0.88)) !important}
+        .gbtn:active{transform:scale(0.88) !important}
+        .tab{flex:1;background:transparent;border:none;cursor:pointer;padding:10px 4px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:'Nunito',sans-serif;font-size:9.5px;font-weight:800;color:rgba(168,216,240,0.3);transition:color 0.18s;text-transform:uppercase;letter-spacing:0.07em}
+        .tab.on{color:#4dc8ff}.tdot{width:3px;height:3px;border-radius:50%;background:#4dc8ff;opacity:0;transition:opacity 0.18s;margin-top:1px}.tab.on .tdot{opacity:1}
+        .card{background:rgba(255,255,255,0.04);backdrop-filter:blur(22px);border:1px solid rgba(100,180,255,0.09);border-radius:16px;padding:12px 13px}
+        .pill{flex:1;padding:6px 4px;border:none;border-radius:7px;background:transparent;cursor:pointer;font-family:'Nunito',sans-serif;font-size:10.5px;font-weight:800;color:rgba(168,216,240,0.36);transition:all 0.18s;text-transform:uppercase;letter-spacing:0.04em}
+        .pill.on{background:rgba(77,200,255,0.14);color:#4dc8ff}
+        .rchip{border:1px solid rgba(77,200,255,0.17);background:rgba(255,255,255,0.04);border-radius:9px;padding:7px 10px;cursor:pointer;font-size:12px;font-weight:800;color:rgba(168,216,240,0.42);transition:all 0.18s;font-family:'Nunito',sans-serif}
+        .rchip.on{background:rgba(77,200,255,0.15);border-color:#4dc8ff;color:#4dc8ff}
+        .btnp{background:linear-gradient(135deg,#1e7cc4,#4dc8ff);border:none;border-radius:11px;color:#020c1a;font-weight:900;cursor:pointer;font-family:'Nunito',sans-serif;transition:transform 0.13s,box-shadow 0.13s;box-shadow:0 4px 13px rgba(77,200,255,0.26)}
+        .btnp:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(77,200,255,0.4)}.btnp:active{transform:scale(0.96)}
+        .sccard{position:relative}
+      `}</style>
+
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,overflow:"hidden"}}>
+        <div style={{position:"absolute",width:420,height:420,borderRadius:"50%",background:"radial-gradient(circle,rgba(16,80,180,0.11) 0%,transparent 70%)",top:-100,right:-80}}/>
+        <div style={{position:"absolute",width:320,height:320,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,130,255,0.07) 0%,transparent 70%)",bottom:-20,left:-60}}/>
+      </div>
+
+      {toast&&(
+        <div style={{position:"fixed",top:13,right:13,zIndex:1000,
+          background:toast.type==="success"?"rgba(34,197,94,0.93)":toast.type==="warn"?"rgba(234,179,8,0.9)":"rgba(36,136,210,0.93)",
+          color:"#fff",padding:"8px 15px",borderRadius:10,fontSize:12.5,fontWeight:800,
+          animation:"toastSlide 0.26s ease",boxShadow:"0 5px 18px rgba(0,0,0,0.3)",maxWidth:220}}>
+          {toast.msg}
+        </div>
+      )}
+
+      <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",display:"flex",flexDirection:"column",position:"relative",zIndex:1}}>
+
+        {/* HEADER */}
+        <div style={{padding:"38px 18px 10px",animation:"fadeUp 0.42s ease"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+            <div>
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:32,letterSpacing:"0.1em",background:"linear-gradient(120deg,#c2e4f8 20%,#4dc8ff 80%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",lineHeight:1}}>HYDRA</div>
+              <div style={{fontSize:9,color:"rgba(168,216,240,0.32)",fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",marginTop:1}}>
+                {new Date().toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"})}
+              </div>
+            </div>
+            {/* Orb */}
+            <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
+              <svg width="72" height="72" viewBox="0 0 72 72" style={{position:"absolute",inset:0}}>
+                <defs>
+                  <clipPath id="hoc"><circle cx="36" cy="36" r="32"/></clipPath>
+                  <linearGradient id="howg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(110,205,255,0.75)"/><stop offset="100%" stopColor="rgba(18,95,200,0.94)"/></linearGradient>
+                </defs>
+                <circle cx="36" cy="36" r="32" fill="rgba(5,18,42,0.78)" stroke="rgba(77,200,255,0.2)" strokeWidth="1.4"/>
+                <g clipPath="url(#hoc)">
+                  <rect x="4" y={72-(orbFill/100)*64-4} width="64" height="64" fill="url(#howg)" style={{transition:"y 0.82s cubic-bezier(0.4,0,0.2,1)"}}/>
+                  <path d={`M4,${72-(orbFill/100)*64-4} Q18,${72-(orbFill/100)*64-8} 36,${72-(orbFill/100)*64-4} Q54,${72-(orbFill/100)*64} 68,${72-(orbFill/100)*64-4}`} fill="rgba(160,235,255,0.35)" style={{transition:"all 0.82s ease"}}/>
+                </g>
+                <circle cx="36" cy="36" r="32" fill="none" stroke="rgba(77,200,255,0.26)" strokeWidth="1.8"/>
+              </svg>
+              <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#fff",lineHeight:1,textShadow:"0 2px 6px rgba(0,0,0,0.5)"}}>{pct}<span style={{fontSize:11}}>%</span></div>
+                <div style={{fontSize:7.5,color:"rgba(232,244,253,0.58)",fontWeight:700}}>of goal</div>
+              </div>
+            </div>
+            {/* Reminder */}
+            <div onClick={toggleReminder}
+              style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,cursor:"pointer",padding:"8px 10px",borderRadius:12,border:`1px solid ${reminderActive?"rgba(77,200,255,0.36)":"rgba(77,200,255,0.12)"}`,background:reminderActive?"rgba(77,200,255,0.09)":"transparent",transition:"all 0.2s",minWidth:52}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:reminderActive?"#4dc8ff":"rgba(168,216,240,0.2)",boxShadow:reminderActive?"0 0 7px #4dc8ff":"none",animation:reminderActive?"pulse 2s infinite":"none"}}/>
+              <span style={{fontSize:9.5,fontWeight:800,color:reminderActive?"#4dc8ff":"rgba(168,216,240,0.27)",letterSpacing:"0.05em",textTransform:"uppercase"}}>{reminderActive?"ON":"OFF"}</span>
+              <span style={{fontSize:8.5,color:"rgba(168,216,240,0.26)",fontWeight:700}}>Remind</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{flex:1,overflowY:"auto",padding:"0 15px 100px"}}>
+
+          {/* ══ HOME ══ */}
+          {tab==="home"&&(
+            <div style={{animation:"fadeUp 0.32s ease"}}>
+              <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+                <div style={{height:4,background:"rgba(255,255,255,0.07)",borderRadius:2,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#1a7ac8,#4dc8ff)",borderRadius:2,transition:"width 0.82s cubic-bezier(0.4,0,0.2,1)",boxShadow:"0 0 6px rgba(77,200,255,0.45)"}}/>
+                </div>
+                <div className="card" style={{padding:"9px 14px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{display:"flex",alignItems:"baseline",gap:5}}>
+                      <span style={{fontSize:9.5,color:"rgba(168,216,240,0.36)",fontWeight:800,letterSpacing:"0.08em"}}>IN</span>
+                      <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#4dc8ff",lineHeight:1}}>{toDisplay(consumed,unit)}<span style={{fontSize:10,color:"rgba(168,216,240,0.48)",marginLeft:1}}>{UNIT_LABEL[unit]}</span></span>
+                    </div>
+                    <div style={{width:1,height:20,background:"rgba(100,180,255,0.13)"}}/>
+                    <div style={{display:"flex",alignItems:"baseline",gap:5}}>
+                      <span style={{fontSize:9.5,color:"rgba(168,216,240,0.36)",fontWeight:800,letterSpacing:"0.08em"}}>LEFT</span>
+                      <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:pct>=100?"#4ade80":"rgba(200,230,248,0.82)",lineHeight:1}}>
+                        {pct>=100?"✓":<>{toDisplay(Math.max(0,target-consumed),unit)}<span style={{fontSize:10,color:"rgba(168,216,240,0.48)",marginLeft:1}}>{UNIT_LABEL[unit]}</span></>}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="card" style={{padding:"9px 13px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{display:"flex",alignItems:"baseline",gap:5}}>
+                      <span style={{fontSize:9.5,color:"rgba(168,216,240,0.36)",fontWeight:800,letterSpacing:"0.08em"}}>GOAL</span>
+                      <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"rgba(200,230,248,0.82)",lineHeight:1}}>{toDisplay(target,unit)}<span style={{fontSize:10,color:"rgba(168,216,240,0.48)",marginLeft:1}}>{UNIT_LABEL[unit]}</span></span>
+                    </div>
+                    <button onClick={()=>setGoalExpanded(v=>!v)}
+                      style={{background:goalExpanded?"rgba(77,200,255,0.12)":"rgba(255,255,255,0.06)",border:`1.5px solid ${goalExpanded?"rgba(77,200,255,0.4)":"rgba(100,180,255,0.15)"}`,borderRadius:"50%",width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.18s",flexShrink:0}}>
+                      <span style={{fontSize:17,lineHeight:1,color:goalExpanded?"#4dc8ff":"rgba(168,216,240,0.5)",fontWeight:300,marginTop:goalExpanded?"-1px":"0"}}>{goalExpanded?"−":"+"}</span>
+                    </button>
+                  </div>
+                  {goalExpanded&&(
+                    <div style={{marginTop:9,animation:"fadeUp 0.22s ease"}}>
+                      <div style={{display:"grid",gridTemplateColumns:`repeat(${targetPresets.length},1fr)`,gap:5,marginBottom:8}}>
+                        {targetPresets.map(v=>(
+                          <button key={v} onClick={()=>applyTarget(v)}
+                            style={{background:target===v?"rgba(77,200,255,0.2)":"rgba(255,255,255,0.05)",border:`1.4px solid ${target===v?"#4dc8ff":"rgba(77,200,255,0.14)"}`,borderRadius:9,padding:"7px 0",cursor:"pointer",fontFamily:"'Nunito',sans-serif",transition:"all 0.16s",textAlign:"center"}}>
+                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,lineHeight:1,color:target===v?"#4dc8ff":"#a8d8f0"}}>{v}</div>
+                            <div style={{fontSize:8.5,color:"rgba(168,216,240,0.38)",fontWeight:700}}>ml</div>
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                        <input type="range" min={300} max={5000} step={50} value={targetSlider} onChange={e=>setTargetSlider(Number(e.target.value))} style={{flex:1}}/>
+                        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:"#4dc8ff",minWidth:52,textAlign:"right"}}>{targetSlider}<span style={{fontSize:9.5,color:"rgba(168,216,240,0.45)",marginLeft:1}}>ml</span></span>
+                      </div>
+                      <button className="btnp" onClick={()=>applyTarget(targetSlider)} style={{width:"100%",padding:"8px",fontSize:12.5}}>Set {targetSlider}ml</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Log Water */}
+              <div className="card" style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <span style={{...LBL,margin:0}}>Log Water</span>
+                  <div style={{display:"flex",background:"rgba(255,255,255,0.05)",borderRadius:7,padding:"2px",gap:1}}>
+                    <button className={`pill${inputMode==="glass"?" on":""}`} onClick={()=>setInputMode("glass")}>Quick</button>
+                    <button className={`pill${inputMode==="custom"?" on":""}`} onClick={()=>setInputMode("custom")}>Custom</button>
+                  </div>
+                </div>
+                {inputMode==="glass"?(
+                  <div style={{display:"flex",justifyContent:"space-around",alignItems:"flex-end",gap:4}}>
+                    {glasses.filter(({ml})=>ml<=(ICON_CAP[iconStyle]||1000)).map(({ml,label})=>(
+                      <DrinkBtn key={ml} ml={ml} label={label} iconStyle={iconStyle} fill={FILL_FOR_ML(ml,iconStyle)} onClick={()=>addEntry(ml)} lit={lastAdded===ml}/>
+                    ))}
+                  </div>
+                ):(
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:10}}>
+                      <PreviewIcon value={customMl} max={ICON_CAP[iconStyle]||1000} iconStyle={iconStyle}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:38,color:"#4dc8ff",lineHeight:1,marginBottom:7}}>
+                          {customMl}<span style={{fontSize:12,color:"rgba(168,216,240,0.44)",marginLeft:2}}>ml</span>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                          {[100,150,200,250,350,500,750,1000].filter(v=>v<=(ICON_CAP[iconStyle]||1000)).map(v=>(
+                            <button key={v} onClick={()=>setCustomMl(Math.min(v,ICON_CAP[iconStyle]||1000))}
+                              style={{background:customMl===v?"rgba(77,200,255,0.2)":"rgba(255,255,255,0.06)",border:`1.5px solid ${customMl===v?"#4dc8ff":"rgba(100,180,255,0.14)"}`,borderRadius:9,padding:"10px 0",cursor:"pointer",fontSize:13,fontWeight:800,color:customMl===v?"#4dc8ff":"#a8d8f0",fontFamily:"'Nunito',sans-serif",transition:"all 0.16s",textAlign:"center",lineHeight:1.2}}>
+                              {v}<span style={{fontSize:9,opacity:0.6}}>ml</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <input type="range" min={50} max={ICON_CAP[iconStyle]||1000} step={iconStyle==="b250"?10:25} value={Math.min(customMl,ICON_CAP[iconStyle]||1000)} onChange={e=>setCustomMl(Number(e.target.value))} style={{marginBottom:8}}/>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"rgba(168,216,240,0.24)",marginBottom:10,fontWeight:700}}><span>50ml</span><span>{ICON_CAP[iconStyle]||1000}ml</span></div>
+                    <button className="btnp" onClick={()=>addEntry(Math.min(customMl,ICON_CAP[iconStyle]||1000))} style={{width:"100%",padding:"12px",fontSize:14}}>+ Log {dispStr(Math.min(customMl,ICON_CAP[iconStyle]||1000),unit)}</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Today's Log */}
+              <div className="card">
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <span style={{...LBL,margin:0}}>Today's Log</span>
+                  <span style={{fontSize:9.5,color:"rgba(168,216,240,0.24)",fontWeight:800}}>{todayList.length} ENTRIES</span>
+                </div>
+                {todayList.length===0?(
+                  <div style={{textAlign:"center",padding:"12px 0",color:"rgba(168,216,240,0.18)",fontSize:12,fontWeight:700}}>Tap a button to start 💧</div>
+                ):(
+                  <div style={{display:"flex",flexDirection:"column",gap:5,maxHeight:200,overflowY:"auto"}}>
+                    {[...todayList].reverse().map(e=>(
+                      <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",background:"rgba(77,200,255,0.05)",borderRadius:10,border:"1px solid rgba(77,200,255,0.07)",animation:"fadeUp 0.25s ease"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <svg width="12" height="17" viewBox="0 0 12 17">
+                            <defs><linearGradient id={`el${e.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(120,210,255,0.9)"/><stop offset="100%" stopColor="rgba(30,130,220,0.96)"/></linearGradient></defs>
+                            <polygon points="0.5,1.5 11.5,1.5 10,15.5 2,15.5" fill="rgba(160,210,255,0.08)" stroke="rgba(120,190,255,0.42)" strokeWidth="0.9"/>
+                            <polygon points="1,9 11,9 10,15.5 2,15.5" fill={`url(#el${e.id})`} opacity="0.87"/>
+                            <line x1="0.5" y1="1.5" x2="11.5" y2="1.5" stroke="rgba(200,240,255,0.68)" strokeWidth="1.1" strokeLinecap="round"/>
+                          </svg>
+                          <div>
+                            <div style={{fontSize:12.5,fontWeight:800,color:"#4dc8ff"}}>{toDisplay(e.amount,unit)}<span style={{fontSize:9,opacity:0.58,marginLeft:1}}>{UNIT_LABEL[unit]}</span></div>
+                            <div style={{fontSize:9,color:"rgba(168,216,240,0.28)",fontWeight:600}}>{e.time}</div>
+                          </div>
+                        </div>
+                        <button onClick={()=>delEntry(today,e.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.15)",borderRadius:6,width:24,height:24,cursor:"pointer",color:"#f87171",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900}}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ══ HISTORY ══ */}
+          {tab==="history"&&(
+            <div style={{animation:"fadeUp 0.32s ease"}}>
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:"0.08em",marginBottom:13,color:"#a8d8f0"}}>History</div>
+
+              {/* ── Calendar date picker ── */}
+              <div className="card" style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{...LBL,margin:0}}>Pick a Date</span>
+                  {historyDate&&(
+                    <button onClick={()=>setHistoryDate(null)}
+                      style={{background:"rgba(77,200,255,0.10)",border:"1px solid rgba(77,200,255,0.25)",
+                        borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:800,
+                        color:"#4dc8ff",fontFamily:"'Nunito',sans-serif"}}>Show All</button>
+                  )}
+                </div>
+                <input type="date"
+                  value={historyDate||""}
+                  max={todayKey()}
+                  onChange={e=>setHistoryDate(e.target.value||null)}
+                  style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid rgba(77,200,255,0.22)",
+                    background:"rgba(5,18,42,0.7)",color:"#a8d8f0",fontSize:13,fontWeight:700,
+                    fontFamily:"'Nunito',sans-serif",outline:"none",boxSizing:"border-box",
+                    colorScheme:"dark"}}/>
+                {historyDate&&(
+                  <div style={{marginTop:8,fontSize:10.5,color:"rgba(168,216,240,0.38)",fontWeight:700}}>
+                    Showing: {new Date(historyDate+"T12:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Day cards ── */}
+              {(()=>{
+                const dates = historyDate
+                  ? (entries[historyDate] ? [historyDate] : [])
+                  : allDates;
+                if(dates.length===0) return(
+                  <div className="card" style={{textAlign:"center",padding:"30px 20px",color:"rgba(168,216,240,0.18)"}}>
+                    <div style={{fontSize:28,marginBottom:7}}>📊</div>
+                    <p style={{fontWeight:700}}>{historyDate?"No entries for this date":"No history yet"}</p>
+                  </div>
+                );
+                return dates.map(date=>{
+                  const dl=entries[date]||[],tot=dl.reduce((s,e)=>s+e.amount,0),p=Math.min(100,Math.round(tot/target*100));
+                  return(<div key={date} className="card" style={{marginBottom:9}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
+                      <div>
+                        <div style={{fontSize:13.5,fontWeight:700,color:"#a8d8f0"}}>{new Date(date+"T12:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"short"})}</div>
+                        <div style={{fontSize:10.5,color:"rgba(168,216,240,0.34)",marginTop:2,fontWeight:700}}>{dl.length} entries · {dispStr(tot,unit)}</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:p>=100?"#4ade80":"#4dc8ff",lineHeight:1}}>{p}%</div>
+                        <div style={{fontSize:9,color:"rgba(168,216,240,0.28)",fontWeight:700}}>{p>=100?"🎉 Goal met":"of goal"}</div>
+                      </div>
+                    </div>
+                    <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2,marginBottom:8,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${p}%`,background:p>=100?"linear-gradient(90deg,#22c55e,#4ade80)":"linear-gradient(90deg,#1a7ac8,#4dc8ff)",borderRadius:2}}/>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {[...dl].reverse().map(e=>(
+                        <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 9px",background:"rgba(77,200,255,0.04)",borderRadius:8}}>
+                          <span style={{fontSize:11,color:"rgba(168,216,240,0.42)",fontWeight:700}}>{e.time}</span>
+                          <span style={{fontSize:12.5,fontWeight:800,color:"#4dc8ff"}}>{toDisplay(e.amount,unit)}<span style={{fontSize:9.5,opacity:0.58,marginLeft:1}}>{UNIT_LABEL[unit]}</span></span>
+                          <button onClick={()=>delEntry(date,e.id)} style={{background:"rgba(239,68,68,0.09)",border:"none",borderRadius:6,width:23,height:23,cursor:"pointer",color:"#f87171",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900}}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>);
+                });
+              })()}
+            </div>
+          )}
+
+          {/* ══ SETTINGS ══ */}
+          {tab==="settings"&&(
+            <div style={{animation:"fadeUp 0.32s ease"}}>
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:"0.08em",marginBottom:13,color:"#a8d8f0"}}>Settings</div>
+
+              {/* ── ICON STYLE SELECTOR ── */}
+              <div className="card" style={{marginBottom:10}}>
+                <span style={{...LBL}}>Log Water Icon Style</span>
+                <p style={{fontSize:10.5,color:"rgba(168,216,240,0.30)",fontWeight:600,marginBottom:12,lineHeight:1.5}}>
+                  Choose one style — all log water buttons on the home screen will use it.
+                </p>
+                <div style={{display:"flex",gap:10,position:"relative"}}>
+                  {ICON_STYLES.map(opt=>(
+                    <StyleCard key={opt.id} opt={opt} selected={iconStyle===opt.id}
+                      onClick={()=>{setIconStyle(opt.id);const defs=STYLE_DEFAULTS[opt.id];setGlasses(defs);setGlassInputs(defs.map(g=>({ml:String(g.ml),label:g.label})));showToast(`Icon: ${opt.label}`,'success');}}/>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── DRINK OPTIONS (ml + label only) ── */}
+              <div className="card" style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{...LBL,margin:0}}>Log Water Amounts</span>
+                  <button onClick={()=>{if(editGlasses)saveGlasses();else{setGlassInputs(glasses.map(g=>({ml:String(g.ml),label:g.label})));setEditGlasses(true);}}}
+                    className="btnp" style={{padding:"5px 12px",fontSize:11.5}}>{editGlasses?"Save":"Edit"}</button>
+                </div>
+                {editGlasses?(
+                  <div>
+                    <p style={{fontSize:10.5,color:"rgba(168,216,240,0.30)",fontWeight:600,marginBottom:10,lineHeight:1.55}}>
+                      Set amount and label for each button. Max 6. Current style holds up to <span style={{color:"#4dc8ff",fontWeight:800}}>{ICON_CAP[iconStyle]}ml</span> — amounts above this are not allowed.
+                    </p>
+                    {glassInputs.map((g,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 10px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(100,180,255,0.1)",borderRadius:10}}>
+                        <div style={{width:22,display:"flex",justifyContent:"center",alignItems:"flex-end",flexShrink:0}}>
+                          {(()=>{const {W,H}=ICON_DIMS[iconStyle];const sW=Math.round(W*0.6),sH=Math.round(H*0.6);
+                            return(<svg width={sW} height={sH} viewBox={`0 0 ${W} ${H}`} style={{overflow:"visible",filter:"drop-shadow(0 1px 4px rgba(0,0,0,0.5))"}}>{getShape(iconStyle,W,H,FILL_FOR_ML(parseInt(g.ml)||100,iconStyle),`gi${i}`)}</svg>);})()}
+                        </div>
+                        <div style={{display:"flex",gap:8,flex:1,flexWrap:"wrap",alignItems:"flex-end"}}>
+                          <div>
+                            <div style={{fontSize:9.5,color:"rgba(168,216,240,0.34)",fontWeight:700,marginBottom:3}}>ML</div>
+                            <input type="number" value={g.ml} min={50} max={ICON_CAP[iconStyle]||1000} step={iconStyle==="b250"?10:25}
+                              onChange={e=>{const v=Math.min(Number(e.target.value),ICON_CAP[iconStyle]||1000);const a=[...glassInputs];a[i]={...a[i],ml:String(v)};setGlassInputs(a);}}/>
+                          </div>
+                          <div>
+                            <div style={{fontSize:9.5,color:"rgba(168,216,240,0.34)",fontWeight:700,marginBottom:3}}>LABEL</div>
+                            <input type="text" value={g.label} maxLength={8} placeholder="e.g. Cup"
+                              onChange={e=>{const a=[...glassInputs];a[i]={...a[i],label:e.target.value};setGlassInputs(a);}}/>
+                          </div>
+                        </div>
+                        {glassInputs.length>1&&(
+                          <button onClick={()=>setGlassInputs(p=>p.filter((_,j)=>j!==i))}
+                            style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.18)",borderRadius:7,width:26,height:26,cursor:"pointer",color:"#f87171",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,flexShrink:0}}>×</button>
+                        )}
+                      </div>
+                    ))}
+                    {glassInputs.length<6&&(
+                      <button onClick={()=>setGlassInputs(p=>[...p,{ml:String(Math.min(100,ICON_CAP[iconStyle]||1000)),label:"New"}])}
+                        style={{background:"none",border:"1px dashed rgba(77,200,255,0.22)",borderRadius:8,padding:"6px 13px",cursor:"pointer",fontSize:12,fontWeight:700,color:"rgba(168,216,240,0.42)",fontFamily:"'Nunito',sans-serif",marginTop:2}}>+ Add amount</button>
+                    )}
+                  </div>
+                ):(
+                  <div style={{display:"flex",justifyContent:"space-around",alignItems:"flex-end",padding:"4px 0"}}>
+                    {glasses.filter(({ml})=>ml<=(ICON_CAP[iconStyle]||1000)).map(({ml,label})=>(
+                      <DrinkBtn key={ml} ml={ml} label={label} iconStyle={iconStyle} fill={FILL_FOR_ML(ml,iconStyle)} onClick={()=>{}} lit={false}/>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Daily Goal Presets */}
+              <div className="card" style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{...LBL,margin:0}}>Daily Goal Presets</span>
+                  <button onClick={()=>{if(editPresets)savePresets();else setEditPresets(true);}} className="btnp" style={{padding:"5px 12px",fontSize:11.5}}>{editPresets?"Save":"Edit"}</button>
+                </div>
+                {editPresets?(
+                  <div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+                      {presetInputs.map((v,i)=>(
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:4}}>
+                          <input type="number" value={v} min={200} max={5000} step={50}
+                            onChange={e=>{const a=[...presetInputs];a[i]=e.target.value;setPresetInputs(a);}}/>
+                          <span style={{fontSize:10,color:"rgba(168,216,240,0.36)",fontWeight:700}}>ml</span>
+                          {presetInputs.length>1&&<button onClick={()=>setPresetInputs(p=>p.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",color:"rgba(248,113,113,0.5)",fontSize:14,fontWeight:900,padding:"0 2px"}}>×</button>}
+                        </div>
+                      ))}
+                    </div>
+                    {presetInputs.length<4&&<button onClick={()=>setPresetInputs(p=>[...p,"2000"])} style={{background:"none",border:"1px dashed rgba(77,200,255,0.22)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:11.5,fontWeight:700,color:"rgba(168,216,240,0.4)",fontFamily:"'Nunito',sans-serif"}}>+ Add</button>}
+                  </div>
+                ):(
+                  <div style={{display:"grid",gridTemplateColumns:`repeat(${targetPresets.length},1fr)`,gap:7}}>
+                    {targetPresets.map(v=>(
+                      <div key={v} style={{background:"rgba(77,200,255,0.07)",border:"1px solid rgba(77,200,255,0.14)",borderRadius:10,padding:"8px 0",textAlign:"center"}}>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,lineHeight:1,color:"#a8d8f0"}}>{v}</div>
+                        <div style={{fontSize:9,color:"rgba(168,216,240,0.38)",fontWeight:700}}>ml</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Reminders */}
+              <div className="card" style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <span style={{...LBL,margin:0}}>Reminders</span>
+                  <div onClick={toggleReminder}
+                    style={{width:42,height:22,borderRadius:11,background:reminderActive?"linear-gradient(90deg,#1a7ac8,#4dc8ff)":"rgba(255,255,255,0.08)",cursor:"pointer",position:"relative",transition:"background 0.26s",boxShadow:reminderActive?"0 0 10px rgba(77,200,255,0.34)":"none"}}>
+                    <div style={{position:"absolute",top:2,left:reminderActive?21:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.26s",boxShadow:"0 2px 4px rgba(0,0,0,0.27)"}}/>
+                  </div>
+                </div>
+                {/* Platform note */}
+                <div style={{fontSize:10.5,color:"rgba(168,216,240,0.32)",fontWeight:600,marginBottom:12,lineHeight:1.6,background:"rgba(77,200,255,0.05)",borderRadius:9,padding:"8px 11px",border:"1px solid rgba(77,200,255,0.09)"}}>
+                  📱 <strong style={{color:"rgba(168,216,240,0.55)"}}>Android Chrome:</strong> Notifications fire even when the app is closed.<br/>
+                  🍎 <strong style={{color:"rgba(168,216,240,0.55)"}}>iPhone Safari:</strong> Must be installed to Home Screen. Requires iOS 16.4+.<br/>
+                  <span style={{color:"rgba(168,216,240,0.22)"}}>Notifications are scheduled for the full day using your tracking window &amp; interval below.</span>
+                </div>
+                <span style={{...LBL}}>Frequency</span>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {REMINDER_OPTIONS.map(o=>(
+                    <button key={o.value} className={`rchip${reminderInterval===o.value?" on":""}`} onClick={()=>setReminderInterval(o.value)}>{o.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tracking Window */}
+              <div className="card" style={{marginBottom:10}}>
+                <span style={{...LBL}}>Tracking Window</span>
+                <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+                  <div><div style={{fontSize:9.5,color:"rgba(168,216,240,0.34)",fontWeight:700,marginBottom:4}}>START</div><input type="time" value={startTime} onChange={e=>setStartTime(e.target.value)}/></div>
+                  <div style={{fontSize:15,color:"rgba(168,216,240,0.16)",marginTop:14}}>→</div>
+                  <div><div style={{fontSize:9.5,color:"rgba(168,216,240,0.34)",fontWeight:700,marginBottom:4}}>END</div><input type="time" value={endTime} onChange={e=>setEndTime(e.target.value)}/></div>
+                </div>
+              </div>
+
+              {/* Units */}
+              <div className="card" style={{marginBottom:10}}>
+                <span style={{...LBL}}>Measurement Units</span>
+                <p style={{fontSize:10.5,color:"rgba(168,216,240,0.30)",fontWeight:600,marginBottom:12,lineHeight:1.5}}>
+                  Choose how water amounts are displayed throughout the app.
+                </p>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {[{id:'ml',label:'mL'},{id:'L',label:'Liters'},{id:'floz',label:'Fl oz'},{id:'gal',label:'Gallons'}].map(u=>(
+                    <button key={u.id} onClick={()=>{setUnit(u.id);showToast(`Units: ${u.label}`,'success');}}
+                      style={{flex:1,minWidth:64,padding:"9px 4px",borderRadius:10,cursor:"pointer",fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,transition:"all 0.16s",textAlign:"center",
+                        background:unit===u.id?"rgba(77,200,255,0.18)":"rgba(255,255,255,0.05)",
+                        border:`1.5px solid ${unit===u.id?"#4dc8ff":"rgba(100,180,255,0.14)"}`,
+                        color:unit===u.id?"#4dc8ff":"#a8d8f0"}}>
+                      {u.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notifications */}
+              <div className="card">
+                <span style={{...LBL}}>Notifications</span>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:700,color:"#a8d8f0"}}>Browser Notifications</div>
+                    <div style={{fontSize:10.5,marginTop:3,fontWeight:700,color:notifPerm==="granted"?"#4ade80":"rgba(168,216,240,0.28)"}}>
+                      {notifPerm==="granted"?"✓ Enabled":notifPerm==="denied"?"✗ Blocked":"Not yet granted"}
+                    </div>
+                  </div>
+                  {notifPerm!=="granted"&&notifPerm!=="denied"&&<button className="btnp" style={{padding:"7px 13px",fontSize:12}} onClick={askNotif}>Enable</button>}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom nav */}
+        <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"rgba(2,12,26,0.92)",backdropFilter:"blur(26px)",borderTop:"1px solid rgba(77,200,255,0.07)",display:"flex",zIndex:10}}>
+          {[{id:"home",icon:"💧",label:"Home"},{id:"history",icon:"📊",label:"History"},{id:"settings",icon:"⚙️",label:"Settings"}].map(t=>(
+            <button key={t.id} className={`tab${tab===t.id?" on":""}`} onClick={()=>setTab(t.id)}>
+              <span style={{fontSize:18}}>{t.icon}</span><span>{t.label}</span><div className="tdot"/>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+    // Change export default to just App, then mount
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App/>);
+  </script>
+
+  <script>
+    // Register service worker for offline + installability
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(r => console.log('SW registered'))
+          .catch(e => console.log('SW error', e));
+      });
+    }
+  </script>
+</body>
+</html>
