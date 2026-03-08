@@ -4,29 +4,20 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="theme-color" content="#020c1a"/>
-
-  <!-- PWA / iOS -->
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="Hydra"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="application-name" content="Hydra"/>
   <meta name="description" content="Track your daily water intake"/>
-
-  <!-- iOS splash / icons (generated inline as SVG data URIs) -->
   <link rel="apple-touch-icon" href="icon-192.png"/>
   <link rel="manifest" href="manifest.json"/>
-
   <title>Hydra 💧</title>
-
-  <!-- React + Babel (runs JSX in browser — no build step needed) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
   <style>
     html, body { margin:0; padding:0; background:#020c1a;
-      /* Safe area for iPhone notch / home bar */
       padding-top: env(safe-area-inset-top);
       padding-bottom: env(safe-area-inset-bottom);
     }
@@ -35,7 +26,6 @@
 </head>
 <body>
   <div id="root"></div>
-
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback } = React;
 
@@ -430,7 +420,7 @@ function getShape(icon,W,H,fill,uid){
 const ICON_DIMS = { glass:{W:36,H:48}, b500:{W:28,H:60}, b250:{W:34,H:72}, b1000:{W:32,H:68} };
 
 /* ── Single drink button on home screen ── */
-function DrinkBtn({ml, label, iconStyle, fill, onClick, lit}){
+function DrinkBtn({ml, label, iconStyle, fill, onClick, lit, unit='ml'}){
   const {W,H}=ICON_DIMS[iconStyle]||ICON_DIMS.glass;
   const uid=`db_${iconStyle}_${ml}`;
   return(
@@ -446,7 +436,7 @@ function DrinkBtn({ml, label, iconStyle, fill, onClick, lit}){
       </svg>
       <div style={{textAlign:"center",lineHeight:1.2}}>
         <div style={{fontSize:11.5,fontWeight:800,color:lit?"#4dc8ff":"#a8d8f0",transition:"color 0.28s"}}>
-          {ml}<span style={{fontSize:8.5,fontWeight:600,opacity:0.6}}>ml</span>
+          {toDisplay(ml,unit)}<span style={{fontSize:8.5,fontWeight:600,opacity:0.6}}>{UNIT_LABEL[unit]}</span>
         </div>
         <div style={{fontSize:8.5,color:"rgba(168,216,240,0.34)",fontWeight:600}}>{label}</div>
       </div>
@@ -456,23 +446,26 @@ function DrinkBtn({ml, label, iconStyle, fill, onClick, lit}){
 
 /* ── Icon Style Selector — used in Settings ── */
 const ICON_STYLES = [
-  {id:"glass", label:"Glass",         desc:"Tumbler · up to 1000ml",  capColor:null},
-  {id:"b500",  label:"500ml Bottle",  desc:"Blue cap · up to 500ml",  capColor:"blue"},
-  {id:"b250",  label:"250ml Bottle",  desc:"Green cap · up to 250ml", capColor:"green"},
-  {id:"b1000", label:"1L Bottle",     desc:"Navy cap · up to 1000ml", capColor:"navy"},
+  {id:"glass", label:"Glass",        capLabel:"Tumbler",   capColor:null},
+  {id:"b500",  label:"500ml Bottle", capLabel:"Blue cap",  capColor:"blue"},
+  {id:"b250",  label:"250ml Bottle", capLabel:"Green cap", capColor:"green"},
+  {id:"b1000", label:"1L Bottle",    capLabel:"Navy cap",  capColor:"navy"},
 ];
 
-function StyleCard({opt, selected, onClick}){
+function StyleCard({opt, selected, onClick, unit='ml'}){
   const {W,H}=ICON_DIMS[opt.id];
-  // show at a comfortable preview size
   const pW=Math.round(W*1.55), pH=Math.round(H*1.55);
+  const cap=ICON_CAP[opt.id]||1000;
+  const desc=`${opt.capLabel} · up to ${dispStr(cap,unit)}`;
+  const label=opt.id==='glass' ? 'Glass' : `${dispStr(cap,unit)} Bottle`;
   return(
     <button onClick={onClick}
       style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8,
         padding:"16px 8px 12px",borderRadius:14,
         border:`2px solid ${selected?"#4dc8ff":"rgba(100,180,255,0.14)"}`,
         background:selected?"rgba(77,200,255,0.11)":"rgba(255,255,255,0.04)",
-        cursor:"pointer",transition:"all 0.18s",minHeight:120,justifyContent:"flex-end"}}>
+        cursor:"pointer",transition:"all 0.18s",minHeight:120,justifyContent:"flex-end",
+        position:"relative"}}>
       <div style={{flex:1,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
         <svg width={pW} height={pH} viewBox={`0 0 ${W} ${H}`}
           style={{overflow:"visible",filter:"drop-shadow(0 3px 10px rgba(0,0,0,0.55))"}}>
@@ -480,8 +473,8 @@ function StyleCard({opt, selected, onClick}){
         </svg>
       </div>
       <div style={{textAlign:"center"}}>
-        <div style={{fontSize:10.5,fontWeight:800,color:selected?"#4dc8ff":"rgba(168,216,240,0.5)",lineHeight:1.3}}>{opt.label}</div>
-        <div style={{fontSize:8.5,color:"rgba(168,216,240,0.25)",fontWeight:600,marginTop:2}}>{opt.desc}</div>
+        <div style={{fontSize:10.5,fontWeight:800,color:selected?"#4dc8ff":"rgba(168,216,240,0.5)",lineHeight:1.3}}>{label}</div>
+        <div style={{fontSize:8.5,color:"rgba(168,216,240,0.25)",fontWeight:600,marginTop:2}}>{desc}</div>
       </div>
       {selected&&(
         <div style={{position:"absolute",top:8,right:8,width:14,height:14,borderRadius:"50%",
@@ -535,15 +528,7 @@ function App(){
   const [glassInputs,setGlassInputs]=useState(DEFAULT_GLASSES.map(g=>({ml:String(g.ml),label:g.label})));
   const [editPresets,setEditPresets]=useState(false);
   const [presetInputs,setPresetInputs]=useState(TARGET_PRESETS_DEFAULT.map(String));
-  const toastRef=useRef(null),litRef=useRef(null),swRef=useRef(null);
-
-  // ── Register service worker & grab its registration ──────
-  useEffect(()=>{
-    if('serviceWorker' in navigator){
-      navigator.serviceWorker.ready.then(reg=>{ swRef.current=reg; });
-    }
-    if("Notification"in window) setNotifPerm(Notification.permission);
-  },[]);
+  const timerRef=useRef(null),toastRef=useRef(null),litRef=useRef(null);
 
   useEffect(()=>{
     const d=load();
@@ -558,58 +543,24 @@ function App(){
       if(d.iconStyle) setIconStyle(d.iconStyle);
       if(d.unit) setUnit(d.unit);
       if(typeof d.goalExpanded==="boolean") setGoalExpanded(d.goalExpanded);
-      if(typeof d.reminderActive==="boolean") setReminderActive(d.reminderActive);
     }
+    if("Notification"in window) setNotifPerm(Notification.permission);
   },[]);
 
   useEffect(()=>{
-    persist({target,startTime,endTime,reminderInterval,entries,targetPresets,glasses,iconStyle,goalExpanded,unit,reminderActive});
-  },[target,startTime,endTime,reminderInterval,entries,targetPresets,glasses,iconStyle,goalExpanded,unit,reminderActive]);
+    persist({target,startTime,endTime,reminderInterval,entries,targetPresets,glasses,iconStyle,goalExpanded,unit});
+  },[target,startTime,endTime,reminderInterval,entries,targetPresets,glasses,iconStyle,goalExpanded,unit]);
 
   const showToast=(msg,type="info")=>{setToast({msg,type});clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(null),2400);};
+  const askNotif=async()=>{if(!("Notification"in window))return showToast("Not supported","warn");const p=await Notification.requestPermission();setNotifPerm(p);if(p==="granted")showToast("Notifications enabled ✓","success");};
+  const fire=useCallback(()=>{const c=(entries[todayKey()]||[]).reduce((s,e)=>s+e.amount,0);if(notifPerm==="granted")new Notification("💧 Hydra",{body:`${c}ml / ${target}ml today`,tag:"hydra"});showToast("💧 Time to hydrate!","info");},[notifPerm,entries,target]);
 
-  // ── Request notification permission ──────────────────────
-  const askNotif=async()=>{
-    if(!("Notification"in window)) return showToast("Not supported on this browser","warn");
-    const p=await Notification.requestPermission();
-    setNotifPerm(p);
-    if(p==="granted") showToast("Notifications enabled ✓","success");
-    else if(p==="denied") showToast("Notifications blocked — check browser settings","warn");
-    return p;
-  };
-
-  // ── Send schedule/cancel to service worker ───────────────
-  const sendToSW=(type, payload={})=>{
-    const sw = swRef.current?.active || navigator.serviceWorker?.controller;
-    if(sw) sw.postMessage({type, payload});
-  };
-
-  const scheduleReminders=useCallback((active, ivMin=reminderInterval, st=startTime, et=endTime)=>{
-    if(!active){ sendToSW('CANCEL_REMINDERS'); return; }
-    const consumed=(entries[todayKey()]||[]).reduce((s,e)=>s+e.amount,0);
-    sendToSW('SCHEDULE_REMINDERS',{intervalMin:ivMin,startTime:st,endTime:et,consumed,target});
-  },[reminderInterval,startTime,endTime,entries,target]);
-
-  // Reschedule when key settings change while active
   useEffect(()=>{
-    if(reminderActive) scheduleReminders(true);
-  },[reminderInterval,startTime,endTime,target]);
-
-  // ── Toggle reminders ON/OFF ───────────────────────────────
-  const toggleReminder=async()=>{
-    let perm=notifPerm;
-    if(perm!=="granted"){ perm=await askNotif(); }
-    if(perm!=="granted") return;
-    const next=!reminderActive;
-    setReminderActive(next);
-    if(next){
-      scheduleReminders(true);
-      showToast("Reminders scheduled ✓","success");
-    } else {
-      scheduleReminders(false);
-      showToast("Reminders paused","warn");
-    }
-  };
+    clearInterval(timerRef.current);
+    if(!reminderActive)return;
+    timerRef.current=setInterval(()=>{const n=toMin(nowStr());if(n>=toMin(startTime)&&n<=toMin(endTime))fire();},reminderInterval*60000);
+    return()=>clearInterval(timerRef.current);
+  },[reminderActive,reminderInterval,startTime,endTime,fire]);
 
   const today=todayKey(), todayList=entries[today]||[];
   const consumed=todayList.reduce((s,e)=>s+e.amount,0);
@@ -620,11 +571,11 @@ function App(){
     const now=new Date();
     setEntries(p=>({...p,[today]:[...(p[today]||[]),{id:Date.now(),time:formatTime(now),amount}]}));
     setLastAdded(amount);clearTimeout(litRef.current);litRef.current=setTimeout(()=>setLastAdded(null),750);
-    showToast(`+${amount}ml logged 💧`,"success");
+    showToast(`+${dispStr(amount,unit)} logged 💧`,"success");
   };
   const delEntry=(date,id)=>setEntries(p=>({...p,[date]:(p[date]||[]).filter(e=>e.id!==id)}));
   const allDates=Object.keys(entries).sort((a,b)=>b.localeCompare(a));
-  const applyTarget=(v)=>{setTarget(v);setTargetSlider(v);showToast(`Goal: ${v}ml`,"success");};
+  const applyTarget=(v)=>{setTarget(v);setTargetSlider(v);showToast(`Goal: ${dispStr(v,unit)}`,"success");};
 
   const saveGlasses=()=>{
     const cap=ICON_CAP[iconStyle]||1000;
@@ -717,7 +668,7 @@ function App(){
               </div>
             </div>
             {/* Reminder */}
-            <div onClick={toggleReminder}
+            <div onClick={()=>{if(!reminderActive&&notifPerm!=="granted"){askNotif();return;}setReminderActive(v=>!v);showToast(reminderActive?"Paused":"Active!",reminderActive?"warn":"success");}}
               style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,cursor:"pointer",padding:"8px 10px",borderRadius:12,border:`1px solid ${reminderActive?"rgba(77,200,255,0.36)":"rgba(77,200,255,0.12)"}`,background:reminderActive?"rgba(77,200,255,0.09)":"transparent",transition:"all 0.2s",minWidth:52}}>
               <div style={{width:6,height:6,borderRadius:"50%",background:reminderActive?"#4dc8ff":"rgba(168,216,240,0.2)",boxShadow:reminderActive?"0 0 7px #4dc8ff":"none",animation:reminderActive?"pulse 2s infinite":"none"}}/>
               <span style={{fontSize:9.5,fontWeight:800,color:reminderActive?"#4dc8ff":"rgba(168,216,240,0.27)",letterSpacing:"0.05em",textTransform:"uppercase"}}>{reminderActive?"ON":"OFF"}</span>
@@ -767,16 +718,16 @@ function App(){
                         {targetPresets.map(v=>(
                           <button key={v} onClick={()=>applyTarget(v)}
                             style={{background:target===v?"rgba(77,200,255,0.2)":"rgba(255,255,255,0.05)",border:`1.4px solid ${target===v?"#4dc8ff":"rgba(77,200,255,0.14)"}`,borderRadius:9,padding:"7px 0",cursor:"pointer",fontFamily:"'Nunito',sans-serif",transition:"all 0.16s",textAlign:"center"}}>
-                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,lineHeight:1,color:target===v?"#4dc8ff":"#a8d8f0"}}>{v}</div>
-                            <div style={{fontSize:8.5,color:"rgba(168,216,240,0.38)",fontWeight:700}}>ml</div>
+                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,lineHeight:1,color:target===v?"#4dc8ff":"#a8d8f0"}}>{toDisplay(v,unit)}</div>
+                            <div style={{fontSize:8.5,color:"rgba(168,216,240,0.38)",fontWeight:700}}>{UNIT_LABEL[unit]}</div>
                           </button>
                         ))}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
                         <input type="range" min={300} max={5000} step={50} value={targetSlider} onChange={e=>setTargetSlider(Number(e.target.value))} style={{flex:1}}/>
-                        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:"#4dc8ff",minWidth:52,textAlign:"right"}}>{targetSlider}<span style={{fontSize:9.5,color:"rgba(168,216,240,0.45)",marginLeft:1}}>ml</span></span>
+                        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:"#4dc8ff",minWidth:52,textAlign:"right"}}>{toDisplay(targetSlider,unit)}<span style={{fontSize:9.5,color:"rgba(168,216,240,0.45)",marginLeft:1}}>{UNIT_LABEL[unit]}</span></span>
                       </div>
-                      <button className="btnp" onClick={()=>applyTarget(targetSlider)} style={{width:"100%",padding:"8px",fontSize:12.5}}>Set {targetSlider}ml</button>
+                      <button className="btnp" onClick={()=>applyTarget(targetSlider)} style={{width:"100%",padding:"8px",fontSize:12.5}}>Set {dispStr(targetSlider,unit)}</button>
                     </div>
                   )}
                 </div>
@@ -794,7 +745,7 @@ function App(){
                 {inputMode==="glass"?(
                   <div style={{display:"flex",justifyContent:"space-around",alignItems:"flex-end",gap:4}}>
                     {glasses.filter(({ml})=>ml<=(ICON_CAP[iconStyle]||1000)).map(({ml,label})=>(
-                      <DrinkBtn key={ml} ml={ml} label={label} iconStyle={iconStyle} fill={FILL_FOR_ML(ml,iconStyle)} onClick={()=>addEntry(ml)} lit={lastAdded===ml}/>
+                      <DrinkBtn key={ml} ml={ml} label={label} iconStyle={iconStyle} fill={FILL_FOR_ML(ml,iconStyle)} onClick={()=>addEntry(ml)} lit={lastAdded===ml} unit={unit}/>
                     ))}
                   </div>
                 ):(
@@ -803,20 +754,20 @@ function App(){
                       <PreviewIcon value={customMl} max={ICON_CAP[iconStyle]||1000} iconStyle={iconStyle}/>
                       <div style={{flex:1}}>
                         <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:38,color:"#4dc8ff",lineHeight:1,marginBottom:7}}>
-                          {customMl}<span style={{fontSize:12,color:"rgba(168,216,240,0.44)",marginLeft:2}}>ml</span>
+                          {toDisplay(customMl,unit)}<span style={{fontSize:12,color:"rgba(168,216,240,0.44)",marginLeft:2}}>{UNIT_LABEL[unit]}</span>
                         </div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
                           {[100,150,200,250,350,500,750,1000].filter(v=>v<=(ICON_CAP[iconStyle]||1000)).map(v=>(
                             <button key={v} onClick={()=>setCustomMl(Math.min(v,ICON_CAP[iconStyle]||1000))}
                               style={{background:customMl===v?"rgba(77,200,255,0.2)":"rgba(255,255,255,0.06)",border:`1.5px solid ${customMl===v?"#4dc8ff":"rgba(100,180,255,0.14)"}`,borderRadius:9,padding:"10px 0",cursor:"pointer",fontSize:13,fontWeight:800,color:customMl===v?"#4dc8ff":"#a8d8f0",fontFamily:"'Nunito',sans-serif",transition:"all 0.16s",textAlign:"center",lineHeight:1.2}}>
-                              {v}<span style={{fontSize:9,opacity:0.6}}>ml</span>
+                              {toDisplay(v,unit)}<span style={{fontSize:9,opacity:0.6}}>{UNIT_LABEL[unit]}</span>
                             </button>
                           ))}
                         </div>
                       </div>
                     </div>
                     <input type="range" min={50} max={ICON_CAP[iconStyle]||1000} step={iconStyle==="b250"?10:25} value={Math.min(customMl,ICON_CAP[iconStyle]||1000)} onChange={e=>setCustomMl(Number(e.target.value))} style={{marginBottom:8}}/>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"rgba(168,216,240,0.24)",marginBottom:10,fontWeight:700}}><span>50ml</span><span>{ICON_CAP[iconStyle]||1000}ml</span></div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"rgba(168,216,240,0.24)",marginBottom:10,fontWeight:700}}><span>{dispStr(50,unit)}</span><span>{dispStr(ICON_CAP[iconStyle]||1000,unit)}</span></div>
                     <button className="btnp" onClick={()=>addEntry(Math.min(customMl,ICON_CAP[iconStyle]||1000))} style={{width:"100%",padding:"12px",fontSize:14}}>+ Log {dispStr(Math.min(customMl,ICON_CAP[iconStyle]||1000),unit)}</button>
                   </div>
                 )}
@@ -941,7 +892,7 @@ function App(){
                 </p>
                 <div style={{display:"flex",gap:10,position:"relative"}}>
                   {ICON_STYLES.map(opt=>(
-                    <StyleCard key={opt.id} opt={opt} selected={iconStyle===opt.id}
+                    <StyleCard key={opt.id} opt={opt} selected={iconStyle===opt.id} unit={unit}
                       onClick={()=>{setIconStyle(opt.id);const defs=STYLE_DEFAULTS[opt.id];setGlasses(defs);setGlassInputs(defs.map(g=>({ml:String(g.ml),label:g.label})));showToast(`Icon: ${opt.label}`,'success');}}/>
                   ))}
                 </div>
@@ -957,7 +908,7 @@ function App(){
                 {editGlasses?(
                   <div>
                     <p style={{fontSize:10.5,color:"rgba(168,216,240,0.30)",fontWeight:600,marginBottom:10,lineHeight:1.55}}>
-                      Set amount and label for each button. Max 6. Current style holds up to <span style={{color:"#4dc8ff",fontWeight:800}}>{ICON_CAP[iconStyle]}ml</span> — amounts above this are not allowed.
+                      Set amount and label for each button. Max 6. Current style holds up to <span style={{color:"#4dc8ff",fontWeight:800}}>{dispStr(ICON_CAP[iconStyle],unit)}</span> — amounts above this are not allowed.
                     </p>
                     {glassInputs.map((g,i)=>(
                       <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 10px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(100,180,255,0.1)",borderRadius:10}}>
@@ -991,7 +942,7 @@ function App(){
                 ):(
                   <div style={{display:"flex",justifyContent:"space-around",alignItems:"flex-end",padding:"4px 0"}}>
                     {glasses.filter(({ml})=>ml<=(ICON_CAP[iconStyle]||1000)).map(({ml,label})=>(
-                      <DrinkBtn key={ml} ml={ml} label={label} iconStyle={iconStyle} fill={FILL_FOR_ML(ml,iconStyle)} onClick={()=>{}} lit={false}/>
+                      <DrinkBtn key={ml} ml={ml} label={label} iconStyle={iconStyle} fill={FILL_FOR_ML(ml,iconStyle)} onClick={()=>{}} lit={false} unit={unit}/>
                     ))}
                   </div>
                 )}
@@ -1021,8 +972,8 @@ function App(){
                   <div style={{display:"grid",gridTemplateColumns:`repeat(${targetPresets.length},1fr)`,gap:7}}>
                     {targetPresets.map(v=>(
                       <div key={v} style={{background:"rgba(77,200,255,0.07)",border:"1px solid rgba(77,200,255,0.14)",borderRadius:10,padding:"8px 0",textAlign:"center"}}>
-                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,lineHeight:1,color:"#a8d8f0"}}>{v}</div>
-                        <div style={{fontSize:9,color:"rgba(168,216,240,0.38)",fontWeight:700}}>ml</div>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,lineHeight:1,color:"#a8d8f0"}}>{toDisplay(v,unit)}</div>
+                        <div style={{fontSize:9,color:"rgba(168,216,240,0.38)",fontWeight:700}}>{UNIT_LABEL[unit]}</div>
                       </div>
                     ))}
                   </div>
@@ -1033,16 +984,10 @@ function App(){
               <div className="card" style={{marginBottom:10}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                   <span style={{...LBL,margin:0}}>Reminders</span>
-                  <div onClick={toggleReminder}
+                  <div onClick={()=>{if(!reminderActive&&notifPerm!=="granted"){askNotif();return;}setReminderActive(v=>!v);showToast(reminderActive?"Paused":"Started!",reminderActive?"warn":"success");}}
                     style={{width:42,height:22,borderRadius:11,background:reminderActive?"linear-gradient(90deg,#1a7ac8,#4dc8ff)":"rgba(255,255,255,0.08)",cursor:"pointer",position:"relative",transition:"background 0.26s",boxShadow:reminderActive?"0 0 10px rgba(77,200,255,0.34)":"none"}}>
                     <div style={{position:"absolute",top:2,left:reminderActive?21:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.26s",boxShadow:"0 2px 4px rgba(0,0,0,0.27)"}}/>
                   </div>
-                </div>
-                {/* Platform note */}
-                <div style={{fontSize:10.5,color:"rgba(168,216,240,0.32)",fontWeight:600,marginBottom:12,lineHeight:1.6,background:"rgba(77,200,255,0.05)",borderRadius:9,padding:"8px 11px",border:"1px solid rgba(77,200,255,0.09)"}}>
-                  📱 <strong style={{color:"rgba(168,216,240,0.55)"}}>Android Chrome:</strong> Notifications fire even when the app is closed.<br/>
-                  🍎 <strong style={{color:"rgba(168,216,240,0.55)"}}>iPhone Safari:</strong> Must be installed to Home Screen. Requires iOS 16.4+.<br/>
-                  <span style={{color:"rgba(168,216,240,0.22)"}}>Notifications are scheduled for the full day using your tracking window &amp; interval below.</span>
                 </div>
                 <span style={{...LBL}}>Frequency</span>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -1111,18 +1056,13 @@ function App(){
   );
 }
 
-    // Change export default to just App, then mount
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App/>);
   </script>
-
   <script>
-    // Register service worker for offline + installability
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
-          .then(r => console.log('SW registered'))
-          .catch(e => console.log('SW error', e));
+        navigator.serviceWorker.register('sw.js').catch(() => {});
       });
     }
   </script>
