@@ -504,6 +504,7 @@ function PreviewIcon({value, max=1000, iconStyle}){
    ════════════════════════════════════════════════ */
 function App(){
   const [tab,setTab]=useState("home");
+  const [isWide,setIsWide]=useState(()=>window.innerWidth>=768);
   const [target,setTarget]=useState(2500);
   const [targetSlider,setTargetSlider]=useState(2500);
   const [targetPresets,setTargetPresets]=useState(TARGET_PRESETS_DEFAULT);
@@ -529,6 +530,7 @@ function App(){
   const [editPresets,setEditPresets]=useState(false);
   const [presetInputs,setPresetInputs]=useState(TARGET_PRESETS_DEFAULT.map(String));
   const timerRef=useRef(null),toastRef=useRef(null),litRef=useRef(null);
+  useEffect(()=>{const fn=()=>setIsWide(window.innerWidth>=768);window.addEventListener('resize',fn);return()=>window.removeEventListener('resize',fn);},[]);
 
   useEffect(()=>{
     const d=load();
@@ -613,6 +615,10 @@ function App(){
         .gbtn:active{transform:scale(0.88) !important}
         .tab{flex:1;background:transparent;border:none;cursor:pointer;padding:10px 4px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:'Nunito',sans-serif;font-size:9.5px;font-weight:800;color:rgba(168,216,240,0.3);transition:color 0.18s;text-transform:uppercase;letter-spacing:0.07em}
         .tab.on{color:#4dc8ff}.tdot{width:3px;height:3px;border-radius:50%;background:#4dc8ff;opacity:0;transition:opacity 0.18s;margin-top:1px}.tab.on .tdot{opacity:1}
+        .sidenav-btn{width:100%;background:transparent;border:none;cursor:pointer;padding:12px 20px;display:flex;flex-direction:row;align-items:center;gap:12px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;color:rgba(168,216,240,0.3);transition:all 0.18s;text-transform:uppercase;letter-spacing:0.07em;border-radius:12px}
+        .sidenav-btn.on{color:#4dc8ff;background:rgba(77,200,255,0.09)}
+        .sidenav-btn:hover{color:rgba(168,216,240,0.7);background:rgba(255,255,255,0.04)}
+        .sidenav-dot{width:4px;height:4px;border-radius:50%;background:#4dc8ff;opacity:0;transition:opacity 0.18s;margin-left:auto}.sidenav-btn.on .sidenav-dot{opacity:1}
         .card{background:rgba(255,255,255,0.04);backdrop-filter:blur(22px);border:1px solid rgba(100,180,255,0.09);border-radius:16px;padding:12px 13px}
         .pill{flex:1;padding:6px 4px;border:none;border-radius:7px;background:transparent;cursor:pointer;font-family:'Nunito',sans-serif;font-size:10.5px;font-weight:800;color:rgba(168,216,240,0.36);transition:all 0.18s;text-transform:uppercase;letter-spacing:0.04em}
         .pill.on{background:rgba(77,200,255,0.14);color:#4dc8ff}
@@ -624,8 +630,9 @@ function App(){
       `}</style>
 
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,overflow:"hidden"}}>
-        <div style={{position:"absolute",width:420,height:420,borderRadius:"50%",background:"radial-gradient(circle,rgba(16,80,180,0.11) 0%,transparent 70%)",top:-100,right:-80}}/>
-        <div style={{position:"absolute",width:320,height:320,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,130,255,0.07) 0%,transparent 70%)",bottom:-20,left:-60}}/>
+        <div style={{position:"absolute",width:520,height:520,borderRadius:"50%",background:"radial-gradient(circle,rgba(16,80,180,0.11) 0%,transparent 70%)",top:-100,right:-80}}/>
+        <div style={{position:"absolute",width:380,height:380,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,130,255,0.07) 0%,transparent 70%)",bottom:-20,left:-60}}/>
+        {isWide&&<div style={{position:"absolute",width:260,height:"100%",top:0,left:0,background:"rgba(2,8,20,0.45)",backdropFilter:"blur(32px)",borderRight:"1px solid rgba(77,200,255,0.07)"}}/>}
       </div>
 
       {toast&&(
@@ -637,17 +644,459 @@ function App(){
         </div>
       )}
 
-      <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",display:"flex",flexDirection:"column",position:"relative",zIndex:1}}>
+      {isWide ? (
+        /* ══════════ IPAD / WIDE LAYOUT ══════════ */
+        <div style={{display:"flex",minHeight:"100vh",position:"relative",zIndex:1}}>
 
-        {/* HEADER */}
-        <div style={{padding:"38px 18px 10px",animation:"fadeUp 0.42s ease"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-            <div>
-              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:32,letterSpacing:"0.1em",background:"linear-gradient(120deg,#c2e4f8 20%,#4dc8ff 80%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",lineHeight:1}}>HYDRA</div>
-              <div style={{fontSize:9,color:"rgba(168,216,240,0.32)",fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",marginTop:1}}>
-                {new Date().toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"})}
+          {/* LEFT SIDEBAR */}
+          <div style={{width:260,flexShrink:0,position:"fixed",top:0,left:0,height:"100vh",display:"flex",flexDirection:"column",padding:"40px 16px 24px",zIndex:10}}>
+            {/* Branding */}
+            <div style={{marginBottom:28}}>
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:42,letterSpacing:"0.1em",background:"linear-gradient(120deg,#c2e4f8 20%,#4dc8ff 80%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",lineHeight:1}}>HYDRA</div>
+              <div style={{fontSize:9,color:"rgba(168,216,240,0.32)",fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",marginTop:3}}>
+                {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"short"})}
               </div>
             </div>
+
+            {/* Big Orb */}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:24}}>
+              <div style={{position:"relative",width:110,height:110}}>
+                <svg width="110" height="110" viewBox="0 0 110 110" style={{position:"absolute",inset:0}}>
+                  <defs>
+                    <clipPath id="hoc2"><circle cx="55" cy="55" r="50"/></clipPath>
+                    <linearGradient id="howg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(110,205,255,0.75)"/><stop offset="100%" stopColor="rgba(18,95,200,0.94)"/></linearGradient>
+                  </defs>
+                  <circle cx="55" cy="55" r="50" fill="rgba(5,18,42,0.78)" stroke="rgba(77,200,255,0.2)" strokeWidth="1.8"/>
+                  <g clipPath="url(#hoc2)">
+                    <rect x="5" y={110-(orbFill/100)*100-5} width="100" height="100" fill="url(#howg2)" style={{transition:"y 0.82s cubic-bezier(0.4,0,0.2,1)"}}/>
+                    <path d={`M5,${110-(orbFill/100)*100-5} Q27,${110-(orbFill/100)*100-10} 55,${110-(orbFill/100)*100-5} Q83,${110-(orbFill/100)*100} 105,${110-(orbFill/100)*100-5}`} fill="rgba(160,235,255,0.35)" style={{transition:"all 0.82s ease"}}/>
+                  </g>
+                  <circle cx="55" cy="55" r="50" fill="none" stroke="rgba(77,200,255,0.26)" strokeWidth="2"/>
+                </svg>
+                <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:36,color:"#fff",lineHeight:1,textShadow:"0 2px 6px rgba(0,0,0,0.5)"}}>{pct}<span style={{fontSize:16}}>%</span></div>
+                  <div style={{fontSize:9,color:"rgba(232,244,253,0.58)",fontWeight:700}}>of goal</div>
+                </div>
+              </div>
+
+              {/* IN / LEFT inline */}
+              <div style={{display:"flex",gap:16,marginTop:14,width:"100%",justifyContent:"center"}}>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:9,color:"rgba(168,216,240,0.36)",fontWeight:800,letterSpacing:"0.08em"}}>IN</div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:"#4dc8ff",lineHeight:1}}>{toDisplay(consumed,unit)}<span style={{fontSize:9,color:"rgba(168,216,240,0.48)",marginLeft:1}}>{UNIT_LABEL[unit]}</span></div>
+                </div>
+                <div style={{width:1,background:"rgba(100,180,255,0.13)"}}/>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:9,color:"rgba(168,216,240,0.36)",fontWeight:800,letterSpacing:"0.08em"}}>LEFT</div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:pct>=100?"#4ade80":"rgba(200,230,248,0.82)",lineHeight:1}}>
+                    {pct>=100?"✓":<>{toDisplay(Math.max(0,target-consumed),unit)}<span style={{fontSize:9,color:"rgba(168,216,240,0.48)",marginLeft:1}}>{UNIT_LABEL[unit]}</span></>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{height:4,background:"rgba(255,255,255,0.07)",borderRadius:2,overflow:"hidden",marginBottom:24}}>
+              <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#1a7ac8,#4dc8ff)",borderRadius:2,transition:"width 0.82s cubic-bezier(0.4,0,0.2,1)",boxShadow:"0 0 6px rgba(77,200,255,0.45)"}}/>
+            </div>
+
+            {/* Reminder */}
+            <div onClick={()=>{if(!reminderActive&&notifPerm!=="granted"){askNotif();return;}setReminderActive(v=>!v);showToast(reminderActive?"Paused":"Active!",reminderActive?"warn":"success");}}
+              style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",borderRadius:12,border:`1px solid ${reminderActive?"rgba(77,200,255,0.36)":"rgba(77,200,255,0.12)"}`,background:reminderActive?"rgba(77,200,255,0.09)":"transparent",cursor:"pointer",transition:"all 0.2s",marginBottom:28}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:7,height:7,borderRadius:"50%",background:reminderActive?"#4dc8ff":"rgba(168,216,240,0.2)",boxShadow:reminderActive?"0 0 7px #4dc8ff":"none",animation:reminderActive?"pulse 2s infinite":"none"}}/>
+                <span style={{fontSize:11,fontWeight:800,color:reminderActive?"#4dc8ff":"rgba(168,216,240,0.4)",letterSpacing:"0.05em",textTransform:"uppercase"}}>Reminder {reminderActive?"ON":"OFF"}</span>
+              </div>
+              <div style={{width:36,height:19,borderRadius:10,background:reminderActive?"linear-gradient(90deg,#1a7ac8,#4dc8ff)":"rgba(255,255,255,0.08)",position:"relative",transition:"background 0.26s",flexShrink:0}}>
+                <div style={{position:"absolute",top:2,left:reminderActive?16:2,width:15,height:15,borderRadius:"50%",background:"#fff",transition:"left 0.26s"}}/>
+              </div>
+            </div>
+
+            {/* Vertical Nav */}
+            <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:"auto"}}>
+              {[{id:"home",icon:"💧",label:"Home"},{id:"history",icon:"📊",label:"History"},{id:"settings",icon:"⚙️",label:"Settings"}].map(t=>(
+                <button key={t.id} className={`sidenav-btn${tab===t.id?" on":""}`} onClick={()=>setTab(t.id)}>
+                  <span style={{fontSize:20}}>{t.icon}</span>
+                  <span>{t.label}</span>
+                  <div className="sidenav-dot"/>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* RIGHT CONTENT */}
+          <div style={{marginLeft:260,flex:1,overflowY:"auto",padding:"40px 36px 60px",minHeight:"100vh"}}>
+            <div style={{maxWidth:900,margin:"0 auto"}}>
+
+              {/* Tab title */}
+              {tab!=="home"&&(
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:32,letterSpacing:"0.08em",marginBottom:20,color:"#a8d8f0",animation:"fadeUp 0.32s ease"}}>{tab==="history"?"History":"Settings"}</div>
+              )}
+              {tab==="home"&&(
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,letterSpacing:"0.08em",marginBottom:20,color:"rgba(168,216,240,0.4)",animation:"fadeUp 0.32s ease"}}>
+                  {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}
+                </div>
+              )}
+
+              {/* ══ HOME (wide) ══ */}
+              {tab==="home"&&(
+                <div style={{animation:"fadeUp 0.32s ease"}}>
+                  {/* 2-col top row: Goal card + Log Water */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+
+                    {/* Goal card */}
+                    <div className="card">
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div style={{display:"flex",alignItems:"baseline",gap:5}}>
+                          <span style={{fontSize:9.5,color:"rgba(168,216,240,0.36)",fontWeight:800,letterSpacing:"0.08em"}}>GOAL</span>
+                          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,color:"rgba(200,230,248,0.82)",lineHeight:1}}>{toDisplay(target,unit)}<span style={{fontSize:11,color:"rgba(168,216,240,0.48)",marginLeft:1}}>{UNIT_LABEL[unit]}</span></span>
+                        </div>
+                        <button onClick={()=>setGoalExpanded(v=>!v)}
+                          style={{background:goalExpanded?"rgba(77,200,255,0.12)":"rgba(255,255,255,0.06)",border:`1.5px solid ${goalExpanded?"rgba(77,200,255,0.4)":"rgba(100,180,255,0.15)"}`,borderRadius:"50%",width:28,height:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.18s",flexShrink:0}}>
+                          <span style={{fontSize:18,lineHeight:1,color:goalExpanded?"#4dc8ff":"rgba(168,216,240,0.5)",fontWeight:300,marginTop:goalExpanded?"-1px":"0"}}>{goalExpanded?"−":"+"}</span>
+                        </button>
+                      </div>
+                      {goalExpanded&&(
+                        <div style={{marginTop:10,animation:"fadeUp 0.22s ease"}}>
+                          <div style={{display:"grid",gridTemplateColumns:`repeat(${targetPresets.length},1fr)`,gap:5,marginBottom:8}}>
+                            {targetPresets.map(v=>(
+                              <button key={v} onClick={()=>applyTarget(v)}
+                                style={{background:target===v?"rgba(77,200,255,0.2)":"rgba(255,255,255,0.05)",border:`1.4px solid ${target===v?"#4dc8ff":"rgba(77,200,255,0.14)"}`,borderRadius:9,padding:"7px 0",cursor:"pointer",fontFamily:"'Nunito',sans-serif",transition:"all 0.16s",textAlign:"center"}}>
+                                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,lineHeight:1,color:target===v?"#4dc8ff":"#a8d8f0"}}>{toDisplay(v,unit)}</div>
+                                <div style={{fontSize:8.5,color:"rgba(168,216,240,0.38)",fontWeight:700}}>{UNIT_LABEL[unit]}</div>
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                            <input type="range" min={300} max={5000} step={50} value={targetSlider} onChange={e=>setTargetSlider(Number(e.target.value))} style={{flex:1}}/>
+                            <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:"#4dc8ff",minWidth:60,textAlign:"right"}}>{toDisplay(targetSlider,unit)}<span style={{fontSize:9.5,color:"rgba(168,216,240,0.45)",marginLeft:1}}>{UNIT_LABEL[unit]}</span></span>
+                          </div>
+                          <button className="btnp" onClick={()=>applyTarget(targetSlider)} style={{width:"100%",padding:"8px",fontSize:12.5}}>Set {dispStr(targetSlider,unit)}</button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Log Water */}
+                    <div className="card">
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                        <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase"}}>Log Water</span>
+                        <div style={{display:"flex",background:"rgba(255,255,255,0.05)",borderRadius:7,padding:"2px",gap:1}}>
+                          <button className={`pill${inputMode==="glass"?" on":""}`} onClick={()=>setInputMode("glass")}>Quick</button>
+                          <button className={`pill${inputMode==="custom"?" on":""}`} onClick={()=>setInputMode("custom")}>Custom</button>
+                        </div>
+                      </div>
+                      {inputMode==="glass"?(
+                        <div style={{display:"flex",justifyContent:"space-around",alignItems:"flex-end",gap:4}}>
+                          {glasses.filter(({ml})=>ml<=(ICON_CAP[iconStyle]||1000)).map(({ml,label})=>(
+                            <DrinkBtn key={ml} ml={ml} label={label} iconStyle={iconStyle} fill={FILL_FOR_ML(ml,iconStyle)} onClick={()=>addEntry(ml)} lit={lastAdded===ml} unit={unit}/>
+                          ))}
+                        </div>
+                      ):(
+                        <div>
+                          <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:10}}>
+                            <PreviewIcon value={customMl} max={ICON_CAP[iconStyle]||1000} iconStyle={iconStyle}/>
+                            <div style={{flex:1}}>
+                              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:38,color:"#4dc8ff",lineHeight:1,marginBottom:7}}>
+                                {toDisplay(customMl,unit)}<span style={{fontSize:12,color:"rgba(168,216,240,0.44)",marginLeft:2}}>{UNIT_LABEL[unit]}</span>
+                              </div>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                                {[100,150,200,250,350,500,750,1000].filter(v=>v<=(ICON_CAP[iconStyle]||1000)).map(v=>(
+                                  <button key={v} onClick={()=>setCustomMl(Math.min(v,ICON_CAP[iconStyle]||1000))}
+                                    style={{background:customMl===v?"rgba(77,200,255,0.2)":"rgba(255,255,255,0.06)",border:`1.5px solid ${customMl===v?"#4dc8ff":"rgba(100,180,255,0.14)"}`,borderRadius:9,padding:"10px 0",cursor:"pointer",fontSize:13,fontWeight:800,color:customMl===v?"#4dc8ff":"#a8d8f0",fontFamily:"'Nunito',sans-serif",transition:"all 0.16s",textAlign:"center",lineHeight:1.2}}>
+                                    {toDisplay(v,unit)}<span style={{fontSize:9,opacity:0.6}}>{UNIT_LABEL[unit]}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          <input type="range" min={50} max={ICON_CAP[iconStyle]||1000} step={iconStyle==="b250"?10:25} value={Math.min(customMl,ICON_CAP[iconStyle]||1000)} onChange={e=>setCustomMl(Number(e.target.value))} style={{marginBottom:8}}/>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"rgba(168,216,240,0.24)",marginBottom:10,fontWeight:700}}><span>{dispStr(50,unit)}</span><span>{dispStr(ICON_CAP[iconStyle]||1000,unit)}</span></div>
+                          <button className="btnp" onClick={()=>addEntry(Math.min(customMl,ICON_CAP[iconStyle]||1000))} style={{width:"100%",padding:"12px",fontSize:14}}>+ Log {dispStr(Math.min(customMl,ICON_CAP[iconStyle]||1000),unit)}</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Today's Log — full width */}
+                  <div className="card">
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                      <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase"}}>Today's Log</span>
+                      <span style={{fontSize:9.5,color:"rgba(168,216,240,0.24)",fontWeight:800}}>{todayList.length} ENTRIES</span>
+                    </div>
+                    {todayList.length===0?(
+                      <div style={{textAlign:"center",padding:"20px 0",color:"rgba(168,216,240,0.18)",fontSize:13,fontWeight:700}}>Tap a button to start 💧</div>
+                    ):(
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,maxHeight:280,overflowY:"auto"}}>
+                        {[...todayList].reverse().map(e=>(
+                          <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:"rgba(77,200,255,0.05)",borderRadius:10,border:"1px solid rgba(77,200,255,0.07)",animation:"fadeUp 0.25s ease"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <svg width="12" height="17" viewBox="0 0 12 17">
+                                <defs><linearGradient id={`el${e.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(120,210,255,0.9)"/><stop offset="100%" stopColor="rgba(30,130,220,0.96)"/></linearGradient></defs>
+                                <polygon points="0.5,1.5 11.5,1.5 10,15.5 2,15.5" fill="rgba(160,210,255,0.08)" stroke="rgba(120,190,255,0.42)" strokeWidth="0.9"/>
+                                <polygon points="1,9 11,9 10,15.5 2,15.5" fill={`url(#el${e.id})`} opacity="0.87"/>
+                                <line x1="0.5" y1="1.5" x2="11.5" y2="1.5" stroke="rgba(200,240,255,0.68)" strokeWidth="1.1" strokeLinecap="round"/>
+                              </svg>
+                              <div>
+                                <div style={{fontSize:13,fontWeight:800,color:"#4dc8ff"}}>{toDisplay(e.amount,unit)}<span style={{fontSize:9,opacity:0.58,marginLeft:1}}>{UNIT_LABEL[unit]}</span></div>
+                                <div style={{fontSize:9,color:"rgba(168,216,240,0.28)",fontWeight:600}}>{e.time}</div>
+                              </div>
+                            </div>
+                            <button onClick={()=>delEntry(today,e.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.15)",borderRadius:6,width:24,height:24,cursor:"pointer",color:"#f87171",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900}}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ══ HISTORY (wide) ══ — reuse mobile markup but wider */}
+              {tab==="history"&&(
+                <div style={{animation:"fadeUp 0.32s ease"}}>
+                  <div className="card" style={{marginBottom:16}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase"}}>Pick a Date</span>
+                      {historyDate&&(
+                        <button onClick={()=>setHistoryDate(null)}
+                          style={{background:"rgba(77,200,255,0.10)",border:"1px solid rgba(77,200,255,0.25)",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:800,color:"#4dc8ff",fontFamily:"'Nunito',sans-serif"}}>Show All</button>
+                      )}
+                    </div>
+                    <input type="date" value={historyDate||""} max={todayKey()} onChange={e=>setHistoryDate(e.target.value||null)}
+                      style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid rgba(77,200,255,0.22)",background:"rgba(5,18,42,0.7)",color:"#a8d8f0",fontSize:13,fontWeight:700,fontFamily:"'Nunito',sans-serif",outline:"none",boxSizing:"border-box",colorScheme:"dark"}}/>
+                    {historyDate&&(
+                      <div style={{marginTop:8,fontSize:10.5,color:"rgba(168,216,240,0.38)",fontWeight:700}}>
+                        Showing: {new Date(historyDate+"T12:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+                      </div>
+                    )}
+                  </div>
+                  {(()=>{
+                    const dates=historyDate?(entries[historyDate]?[historyDate]:[]):allDates;
+                    if(dates.length===0) return(
+                      <div className="card" style={{textAlign:"center",padding:"40px 20px",color:"rgba(168,216,240,0.18)"}}>
+                        <div style={{fontSize:32,marginBottom:8}}>📊</div>
+                        <p style={{fontWeight:700,fontSize:14}}>{historyDate?"No entries for this date":"No history yet"}</p>
+                      </div>
+                    );
+                    return(
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                        {dates.map(date=>{
+                          const dl=entries[date]||[],tot=dl.reduce((s,e)=>s+e.amount,0),p=Math.min(100,Math.round(tot/target*100));
+                          return(<div key={date} className="card">
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
+                              <div>
+                                <div style={{fontSize:13.5,fontWeight:700,color:"#a8d8f0"}}>{new Date(date+"T12:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"short"})}</div>
+                                <div style={{fontSize:10.5,color:"rgba(168,216,240,0.34)",marginTop:2,fontWeight:700}}>{dl.length} entries · {dispStr(tot,unit)}</div>
+                              </div>
+                              <div style={{textAlign:"right"}}>
+                                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:p>=100?"#4ade80":"#4dc8ff",lineHeight:1}}>{p}%</div>
+                                <div style={{fontSize:9,color:"rgba(168,216,240,0.28)",fontWeight:700}}>{p>=100?"🎉 Goal met":"of goal"}</div>
+                              </div>
+                            </div>
+                            <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2,marginBottom:8,overflow:"hidden"}}>
+                              <div style={{height:"100%",width:`${p}%`,background:p>=100?"linear-gradient(90deg,#22c55e,#4ade80)":"linear-gradient(90deg,#1a7ac8,#4dc8ff)",borderRadius:2}}/>
+                            </div>
+                            <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                              {[...dl].reverse().map(e=>(
+                                <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 9px",background:"rgba(77,200,255,0.04)",borderRadius:8}}>
+                                  <span style={{fontSize:11,color:"rgba(168,216,240,0.42)",fontWeight:700}}>{e.time}</span>
+                                  <span style={{fontSize:12.5,fontWeight:800,color:"#4dc8ff"}}>{toDisplay(e.amount,unit)}<span style={{fontSize:9.5,opacity:0.58,marginLeft:1}}>{UNIT_LABEL[unit]}</span></span>
+                                  <button onClick={()=>delEntry(date,e.id)} style={{background:"rgba(239,68,68,0.09)",border:"none",borderRadius:6,width:23,height:23,cursor:"pointer",color:"#f87171",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900}}>×</button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>);
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* ══ SETTINGS (wide) ══ — 2 col grid */}
+              {tab==="settings"&&(
+                <div style={{animation:"fadeUp 0.32s ease"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"start"}}>
+
+                    {/* Left col */}
+                    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+                      {/* Icon style */}
+                      <div className="card">
+                        <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8,display:"block"}}>Log Water Icon Style</span>
+                        <p style={{fontSize:10.5,color:"rgba(168,216,240,0.30)",fontWeight:600,marginBottom:12,lineHeight:1.5}}>Choose one style — all log water buttons will use it.</p>
+                        <div style={{display:"flex",gap:8,position:"relative"}}>
+                          {ICON_STYLES.map(opt=>(
+                            <StyleCard key={opt.id} opt={opt} selected={iconStyle===opt.id} unit={unit}
+                              onClick={()=>{setIconStyle(opt.id);const defs=STYLE_DEFAULTS[opt.id];setGlasses(defs);setGlassInputs(defs.map(g=>({ml:String(g.ml),label:g.label})));showToast(`Icon: ${opt.label}`,'success');}}/>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Log Water Amounts */}
+                      <div className="card">
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                          <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase"}}>Log Water Amounts</span>
+                          <button onClick={()=>{if(editGlasses)saveGlasses();else{setGlassInputs(glasses.map(g=>({ml:String(g.ml),label:g.label})));setEditGlasses(true);}}}
+                            className="btnp" style={{padding:"5px 12px",fontSize:11.5}}>{editGlasses?"Save":"Edit"}</button>
+                        </div>
+                        {editGlasses?(
+                          <div>
+                            <p style={{fontSize:10.5,color:"rgba(168,216,240,0.30)",fontWeight:600,marginBottom:10,lineHeight:1.55}}>
+                              Max 6. Current style holds up to <span style={{color:"#4dc8ff",fontWeight:800}}>{dispStr(ICON_CAP[iconStyle],unit)}</span>.
+                            </p>
+                            {glassInputs.map((g,i)=>(
+                              <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 10px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(100,180,255,0.1)",borderRadius:10}}>
+                                <div style={{width:22,display:"flex",justifyContent:"center",alignItems:"flex-end",flexShrink:0}}>
+                                  {(()=>{const {W,H}=ICON_DIMS[iconStyle];const sW=Math.round(W*0.6),sH=Math.round(H*0.6);
+                                    return(<svg width={sW} height={sH} viewBox={`0 0 ${W} ${H}`} style={{overflow:"visible",filter:"drop-shadow(0 1px 4px rgba(0,0,0,0.5))"}}>{getShape(iconStyle,W,H,FILL_FOR_ML(parseInt(g.ml)||100,iconStyle),`gi${i}`)}</svg>);})()}
+                                </div>
+                                <div style={{display:"flex",gap:8,flex:1,flexWrap:"wrap",alignItems:"flex-end"}}>
+                                  <div>
+                                    <div style={{fontSize:9.5,color:"rgba(168,216,240,0.34)",fontWeight:700,marginBottom:3}}>ML</div>
+                                    <input type="number" value={g.ml} min={50} max={ICON_CAP[iconStyle]||1000} step={iconStyle==="b250"?10:25}
+                                      onChange={e=>{const v=Math.min(Number(e.target.value),ICON_CAP[iconStyle]||1000);const a=[...glassInputs];a[i]={...a[i],ml:String(v)};setGlassInputs(a);}}/>
+                                  </div>
+                                  <div>
+                                    <div style={{fontSize:9.5,color:"rgba(168,216,240,0.34)",fontWeight:700,marginBottom:3}}>LABEL</div>
+                                    <input type="text" value={g.label} maxLength={8} placeholder="e.g. Cup"
+                                      onChange={e=>{const a=[...glassInputs];a[i]={...a[i],label:e.target.value};setGlassInputs(a);}}/>
+                                  </div>
+                                </div>
+                                {glassInputs.length>1&&(
+                                  <button onClick={()=>setGlassInputs(p=>p.filter((_,j)=>j!==i))}
+                                    style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.18)",borderRadius:7,width:26,height:26,cursor:"pointer",color:"#f87171",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,flexShrink:0}}>×</button>
+                                )}
+                              </div>
+                            ))}
+                            {glassInputs.length<6&&(
+                              <button onClick={()=>setGlassInputs(p=>[...p,{ml:String(Math.min(100,ICON_CAP[iconStyle]||1000)),label:"New"}])}
+                                style={{background:"none",border:"1px dashed rgba(77,200,255,0.22)",borderRadius:8,padding:"6px 13px",cursor:"pointer",fontSize:12,fontWeight:700,color:"rgba(168,216,240,0.42)",fontFamily:"'Nunito',sans-serif",marginTop:2}}>+ Add amount</button>
+                            )}
+                          </div>
+                        ):(
+                          <div style={{display:"flex",justifyContent:"space-around",alignItems:"flex-end",padding:"4px 0"}}>
+                            {glasses.filter(({ml})=>ml<=(ICON_CAP[iconStyle]||1000)).map(({ml,label})=>(
+                              <DrinkBtn key={ml} ml={ml} label={label} iconStyle={iconStyle} fill={FILL_FOR_ML(ml,iconStyle)} onClick={()=>{}} lit={false} unit={unit}/>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Measurement Units */}
+                      <div className="card">
+                        <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8,display:"block"}}>Measurement Units</span>
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          {[{id:'ml',label:'mL'},{id:'L',label:'Liters'},{id:'floz',label:'Fl oz'},{id:'gal',label:'Gallons'}].map(u=>(
+                            <button key={u.id} onClick={()=>{setUnit(u.id);showToast(`Units: ${u.label}`,'success');}}
+                              style={{flex:1,minWidth:64,padding:"9px 4px",borderRadius:10,cursor:"pointer",fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,transition:"all 0.16s",textAlign:"center",
+                                background:unit===u.id?"rgba(77,200,255,0.18)":"rgba(255,255,255,0.05)",
+                                border:`1.5px solid ${unit===u.id?"#4dc8ff":"rgba(100,180,255,0.14)"}`,
+                                color:unit===u.id?"#4dc8ff":"#a8d8f0"}}>
+                              {u.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right col */}
+                    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+                      {/* Daily Goal Presets */}
+                      <div className="card">
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                          <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase"}}>Daily Goal Presets</span>
+                          <button onClick={()=>{if(editPresets)savePresets();else setEditPresets(true);}} className="btnp" style={{padding:"5px 12px",fontSize:11.5}}>{editPresets?"Save":"Edit"}</button>
+                        </div>
+                        {editPresets?(
+                          <div>
+                            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+                              {presetInputs.map((v,i)=>(
+                                <div key={i} style={{display:"flex",alignItems:"center",gap:4}}>
+                                  <input type="number" value={v} min={200} max={5000} step={50}
+                                    onChange={e=>{const a=[...presetInputs];a[i]=e.target.value;setPresetInputs(a);}}/>
+                                  <span style={{fontSize:10,color:"rgba(168,216,240,0.36)",fontWeight:700}}>ml</span>
+                                  {presetInputs.length>1&&<button onClick={()=>setPresetInputs(p=>p.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",color:"rgba(248,113,113,0.5)",fontSize:14,fontWeight:900,padding:"0 2px"}}>×</button>}
+                                </div>
+                              ))}
+                            </div>
+                            {presetInputs.length<4&&<button onClick={()=>setPresetInputs(p=>[...p,"2000"])} style={{background:"none",border:"1px dashed rgba(77,200,255,0.22)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:11.5,fontWeight:700,color:"rgba(168,216,240,0.4)",fontFamily:"'Nunito',sans-serif"}}>+ Add</button>}
+                          </div>
+                        ):(
+                          <div style={{display:"grid",gridTemplateColumns:`repeat(${targetPresets.length},1fr)`,gap:7}}>
+                            {targetPresets.map(v=>(
+                              <div key={v} style={{background:"rgba(77,200,255,0.07)",border:"1px solid rgba(77,200,255,0.14)",borderRadius:10,padding:"8px 0",textAlign:"center"}}>
+                                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,lineHeight:1,color:"#a8d8f0"}}>{toDisplay(v,unit)}</div>
+                                <div style={{fontSize:9,color:"rgba(168,216,240,0.38)",fontWeight:700}}>{UNIT_LABEL[unit]}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Reminders */}
+                      <div className="card">
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                          <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase"}}>Reminders</span>
+                          <div onClick={()=>{if(!reminderActive&&notifPerm!=="granted"){askNotif();return;}setReminderActive(v=>!v);showToast(reminderActive?"Paused":"Started!",reminderActive?"warn":"success");}}
+                            style={{width:42,height:22,borderRadius:11,background:reminderActive?"linear-gradient(90deg,#1a7ac8,#4dc8ff)":"rgba(255,255,255,0.08)",cursor:"pointer",position:"relative",transition:"background 0.26s",boxShadow:reminderActive?"0 0 10px rgba(77,200,255,0.34)":"none"}}>
+                            <div style={{position:"absolute",top:2,left:reminderActive?21:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.26s",boxShadow:"0 2px 4px rgba(0,0,0,0.27)"}}/>
+                          </div>
+                        </div>
+                        <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8,display:"block"}}>Frequency</span>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {REMINDER_OPTIONS.map(o=>(
+                            <button key={o.value} className={`rchip${reminderInterval===o.value?" on":""}`} onClick={()=>setReminderInterval(o.value)}>{o.label}</button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Tracking Window */}
+                      <div className="card">
+                        <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:10,display:"block"}}>Tracking Window</span>
+                        <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+                          <div><div style={{fontSize:9.5,color:"rgba(168,216,240,0.34)",fontWeight:700,marginBottom:4}}>START</div><input type="time" value={startTime} onChange={e=>setStartTime(e.target.value)}/></div>
+                          <div style={{fontSize:15,color:"rgba(168,216,240,0.16)",marginTop:14}}>→</div>
+                          <div><div style={{fontSize:9.5,color:"rgba(168,216,240,0.34)",fontWeight:700,marginBottom:4}}>END</div><input type="time" value={endTime} onChange={e=>setEndTime(e.target.value)}/></div>
+                        </div>
+                      </div>
+
+                      {/* Notifications */}
+                      <div className="card">
+                        <span style={{fontSize:10,fontWeight:800,color:"rgba(168,216,240,0.38)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:10,display:"block"}}>Notifications</span>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:700,color:"#a8d8f0"}}>Browser Notifications</div>
+                            <div style={{fontSize:10.5,marginTop:3,fontWeight:700,color:notifPerm==="granted"?"#4ade80":"rgba(168,216,240,0.28)"}}>
+                              {notifPerm==="granted"?"✓ Enabled":notifPerm==="denied"?"✗ Blocked":"Not yet granted"}
+                            </div>
+                          </div>
+                          {notifPerm!=="granted"&&notifPerm!=="denied"&&<button className="btnp" style={{padding:"7px 13px",fontSize:12}} onClick={askNotif}>Enable</button>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+
+      ) : (
+
+        /* ══════════ MOBILE LAYOUT (unchanged) ══════════ */
+        <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",display:"flex",flexDirection:"column",position:"relative",zIndex:1}}>
+
+          {/* HEADER */}
+          <div style={{padding:"38px 18px 10px",animation:"fadeUp 0.42s ease"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:32,letterSpacing:"0.1em",background:"linear-gradient(120deg,#c2e4f8 20%,#4dc8ff 80%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",lineHeight:1}}>HYDRA</div>
+                <div style={{fontSize:9,color:"rgba(168,216,240,0.32)",fontWeight:800,letterSpacing:"0.13em",textTransform:"uppercase",marginTop:1}}>
+                  {new Date().toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"})}
+                </div>
+              </div>
             {/* Orb */}
             <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
               <svg width="72" height="72" viewBox="0 0 72 72" style={{position:"absolute",inset:0}}>
@@ -1052,6 +1501,7 @@ function App(){
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }
